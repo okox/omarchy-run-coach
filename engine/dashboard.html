@@ -50,6 +50,9 @@ section.folded > .body { display: none; }
 .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .note { background: color-mix(in srgb, var(--sel) 14%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
 .note .nh { display: flex; justify-content: space-between; color: var(--title); font-weight: bold; } .note .by { color: var(--dim); font-weight: normal; font-size: 12px; }
+.hero { background: color-mix(in srgb, var(--sel) 22%, var(--card)); border-color: color-mix(in srgb, var(--title) 45%, transparent); }
+.hero .htitle { font-size: 26px; font-weight: bold; line-height: 1.2; }
+.hero .steps { font-size: 15px; padding-left: 20px; } .hero .steps li { margin: 4px 0; }
 .big { font-size: 34px; font-weight: bold; color: var(--accent); }
 svg { display: block; width: 100%; overflow: visible; }
 svg text { fill: var(--dim); font: 11px ui-monospace, monospace; }
@@ -145,11 +148,12 @@ function renderPlan() {
   const cur = ST.current;
   if (cur) {
     const [s, b] = section("session", ST.current_is_today ? "Today" : "Next session", statusLabel(cur.status) + (cur.moved ? " · moved" : ""));
-    b.append(h("div", {}, `<div style="font-size:16px;font-weight:bold">${esc((ST.current_is_today ? "Today" : cur.dow + " " + cur.date.slice(8)) + " · " + cur.title)}</div>
+    s.classList.add("hero");
+    b.append(h("div", {}, `<div class="htitle">${esc((ST.current_is_today ? "" : cur.dow + " " + cur.date.slice(8) + " · ") + cur.title)}</div>
       <div class="dim small">${esc([cur.id, "Week " + cur.week + " " + cur.phase, cur.garmin ? "Watch: " + cur.garmin : ""].filter(Boolean).join("  ·  "))}</div>`));
     if (ST.today_rest) b.append(h("div", { class: "dim" }, esc(ST.rest_note || "Rest day")));
     b.append(h("ul", { class: "steps" }, cur.steps.map(x => `<li>${esc(x)}</li>`).join("")));
-    if (cur.result) b.append(h("div", { style: `color:${stateColor(cur.result.status)}` }, esc(cur.result.verdict)));
+    if (cur.result) b.append(h("div", { style: `color:${stateColor(cur.result.status)};font-size:15px` }, esc(cur.result.verdict)));
     b.append(h("div", { class: "dim small" }, "Mark it from the bar panel or with <code>run-coach mark done|skip|move</code>"));
     col.append(s);
   }

@@ -43,6 +43,8 @@ Panel {
   readonly property color cAccent: Commons.Color.menu.selectedText
   readonly property color cTitle: Commons.Color.menu.selectedText
   readonly property color cardFill: Qt.rgba(selTint.r, selTint.g, selTint.b, Math.max(0.05, selTint.a * 0.32))
+  readonly property color heroFill: Qt.rgba(selTint.r, selTint.g, selTint.b, Math.max(0.10, Math.min(0.30, selTint.a * 0.9)))
+  readonly property color heroEdge: Qt.rgba(cAccent.r, cAccent.g, cAccent.b, 0.45)
   readonly property color cardEdge: Qt.rgba(selTint.r, selTint.g, selTint.b, Math.min(0.45, Math.max(0.12, selTint.a * 1.3)))
   readonly property color cCyan: pal("cyan", "#449dab")
   readonly property color cOrange: pal("orange", "#eb927b")
@@ -496,6 +498,7 @@ Panel {
               spacing: Style.space(14)
               Card {
                 visible: root.cur !== null
+                hero: true
                 SectionHead {
                   visible: root.cur !== null
                   key: "session"
@@ -530,31 +533,25 @@ Panel {
                       anchors.right: parent.right
                       spacing: Style.space(3)
 
-                      Item {
+                      PText {
+                        id: heroTitle
                         width: parent.width
-                        implicitHeight: heroTitle.implicitHeight
-                        PText {
-                          id: heroTitle
-                          width: parent.width - heroStatus.implicitWidth - Style.space(10)
-                          elide: Text.ElideRight
-                          font.pixelSize: Style.font.heading
-                          font.bold: true
-                          text: root.cur ? ((root.st.current_is_today ? "Today" : root.cur.dow + " " + root.cur.date.slice(8)) + " · " + root.cur.title) : ""
-                        }
-                        PText {
-                          id: heroStatus
-                          anchors.right: parent.right
-                          anchors.baseline: heroTitle.baseline
-                          color: root.cur ? root.stateColor(root.cur.status) : root.dim
-                          font.pixelSize: Style.font.body
-                          text: root.cur ? root.statusLabel(root.cur.status) + (root.cur.moved ? " · moved" : "") : ""
-                        }
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Style.font.display
+                        font.bold: true
+                        text: root.cur ? ((root.st.current_is_today ? "" : root.cur.dow + " " + root.cur.date.slice(8) + " · ") + root.cur.title) : ""
+                      }
+                      PText {
+                        id: heroStatus
+                        color: root.cur ? root.stateColor(root.cur.status) : root.dim
+                        font.pixelSize: Style.font.title
+                        text: root.cur ? root.statusLabel(root.cur.status) + (root.cur.moved ? " · moved" : "") : ""
                       }
                       PText {
                         width: parent.width
                         elide: Text.ElideRight
                         color: root.dim
-                        font.pixelSize: Style.font.body
+                        font.pixelSize: Style.font.bodySmall
                         text: root.cur ? [root.cur.id, "Week " + root.cur.week + " " + root.cur.phase,
                                           root.cur.garmin ? "Watch: " + root.cur.garmin : ""].filter(function(x) { return x }).join("  ·  ") : ""
                       }
@@ -566,15 +563,15 @@ Panel {
                       }
                       Column {
                         width: parent.width
-                        topPadding: Style.space(4)
-                        spacing: Style.space(2)
+                        topPadding: Style.space(8)
+                        spacing: Style.space(5)
                         Repeater {
                           model: root.cur ? root.cur.steps : []
                           PText {
                             required property var modelData
                             width: parent.width
                             wrapMode: Text.Wrap
-                            font.pixelSize: Style.font.body
+                            font.pixelSize: Style.font.title
                             text: "·  " + modelData
                           }
                         }
@@ -584,7 +581,7 @@ Panel {
                         width: parent.width
                         wrapMode: Text.Wrap
                         color: root.cur && root.cur.result ? root.stateColor(root.cur.result.status) : root.foreground
-                        font.pixelSize: Style.font.body
+                        font.pixelSize: Style.font.title
                         text: root.cur && root.cur.result ? root.cur.result.verdict : ""
                       }
                     }
@@ -1886,14 +1883,15 @@ Panel {
   // A section's surface: faint fill and edge from the theme, no glow, no accent bar.
   component Card: Rectangle {
     id: card
+    property bool hero: false
     default property alias content: cardCol.data
     readonly property real pad: Style.space(14)
     width: parent ? parent.width : 0
     implicitHeight: cardCol.implicitHeight + pad * 2
     radius: Style.space(12)
-    color: root.cardFill
+    color: hero ? root.heroFill : root.cardFill
     border.width: 1
-    border.color: root.cardEdge
+    border.color: hero ? root.heroEdge : root.cardEdge
     Column {
       id: cardCol
       x: card.pad; y: card.pad
