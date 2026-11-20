@@ -537,14 +537,14 @@ Panel {
                         id: heroTitle
                         width: parent.width
                         wrapMode: Text.Wrap
-                        font.pixelSize: Style.font.display
+                        font.pixelSize: Style.font.heading
                         font.bold: true
                         text: root.cur ? ((root.st.current_is_today ? "" : root.cur.dow + " " + root.cur.date.slice(8) + " · ") + root.cur.title) : ""
                       }
                       PText {
                         id: heroStatus
                         color: root.cur ? root.stateColor(root.cur.status) : root.dim
-                        font.pixelSize: Style.font.title
+                        font.pixelSize: Style.font.body
                         text: root.cur ? root.statusLabel(root.cur.status) + (root.cur.moved ? " · moved" : "") : ""
                       }
                       PText {
@@ -563,15 +563,15 @@ Panel {
                       }
                       Column {
                         width: parent.width
-                        topPadding: Style.space(8)
-                        spacing: Style.space(5)
+                        topPadding: Style.space(4)
+                        spacing: Style.space(2)
                         Repeater {
                           model: root.cur ? root.cur.steps : []
                           PText {
                             required property var modelData
                             width: parent.width
                             wrapMode: Text.Wrap
-                            font.pixelSize: Style.font.title
+                            font.pixelSize: Style.font.body
                             text: "·  " + modelData
                           }
                         }
@@ -581,7 +581,7 @@ Panel {
                         width: parent.width
                         wrapMode: Text.Wrap
                         color: root.cur && root.cur.result ? root.stateColor(root.cur.result.status) : root.foreground
-                        font.pixelSize: Style.font.title
+                        font.pixelSize: Style.font.body
                         text: root.cur && root.cur.result ? root.cur.result.verdict : ""
                       }
                     }
