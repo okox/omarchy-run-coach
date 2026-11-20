@@ -9,7 +9,7 @@
 :root {
   --bg: #1a1b26; --card: #1f2130; --fg: #c0caf5; --dim: #7a82a8; --line: #2b2f45;
   --accent: #7aa2f7; --green: #9ece6a; --yellow: #e0af68; --red: #f7768e;
-  --orange: #eb927b; --cyan: #449dab; --magenta: #ad8ee6;
+  --orange: #eb927b; --cyan: #449dab; --magenta: #ad8ee6; --sel: #7aa2f7; --title: var(--fg);
   /*THEME*/
 }
 * { box-sizing: border-box; }
@@ -24,6 +24,7 @@ header .right { margin-left: auto; color: var(--dim); font-size: 12px; }
 main { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; max-width: 1500px; margin: 0 auto; align-items: start; }
 .col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+section > h2 .ttl { color: var(--title); }
 section > h2 { display: flex; align-items: baseline; gap: 8px; font-size: 16px; margin: 0; cursor: pointer; user-select: none; }
 section > h2 .chev { color: var(--dim); width: 1em; display: inline-block; transition: transform .15s; }
 section.folded > h2 .chev { transform: rotate(-90deg); }
@@ -99,9 +100,13 @@ const statusLabel = s => ({ planned: "Planned", done: "Done", warn: "Check", mis
 const meaning = d => ({ done: "Done, on plan", warn: "Done, but off plan", missed: "Missed", unconfirmed: "No data yet (watch not synced)",
                         skipped: "Skipped", planned: d.future ? "Planned" : "Planned for today", extra: "Extra run (not in the plan)",
                         rest: "Rest day" }[d.status] || "Nothing planned");
-const zoneColor = k => ({ recovery: css("--cyan"), easy: css("--green"), steady: css("--yellow"), threshold: css("--orange"),
-                          tempo_vo2: css("--red"), interval: css("--magenta") }[k] || css("--dim"));
-const stageColor = k => ({ warmup: css("--cyan"), active: css("--green"), interval: css("--orange"), cooldown: css("--accent") }[k] || css("--dim"));
+// HR zones are ordered: one ramp from the shell's selection tint (calm) to red (hot).
+const hex = c => { const m = /^#?([0-9a-f]{6})$/i.exec(c.trim()); const n = m ? parseInt(m[1], 16) : 0x808080; return [n >> 16, n >> 8 & 255, n & 255]; };
+const mixc = (a, b, t) => { const x = hex(a), y = hex(b); return "rgb(" + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(",") + ")"; };
+const zoneColor = k => { const i = ["recovery", "easy", "steady", "threshold", "tempo_vo2", "interval"].indexOf(k); if (i < 0) return css("--dim");
+  return i < 3 ? mixc(css("--sel"), css("--accent"), i / 2) : mixc(css("--accent"), css("--red"), (i - 2) / 3); };
+const stageColor = k => ({ warmup: css("--accent"), cooldown: css("--accent"), active: css("--fg"), interval: css("--red") }[k] || css("--dim"));
+const stageAlpha = k => ({ warmup: .12, cooldown: .12, active: .05, interval: .2 }[k] || .04);
 function hms(s) { if (s == null) return "-"; s = Math.round(s); const H = Math.floor(s / 3600), M = Math.floor(s % 3600 / 60), S = s % 60;
   return (H ? H + ":" + String(M).padStart(2, "0") : M) + ":" + String(S).padStart(2, "0"); }
 const paceTxt = s => s ? Math.floor(s / 60) + ":" + String(Math.round(s % 60)).padStart(2, "0") : "-";
@@ -250,7 +255,7 @@ function runChart(parent, ch) {
     const X = km => pw * km / total, YP = v => top + (Math.min(phi, Math.max(plo, v)) - plo) / (phi - plo) * ph, YH = v => top + ph + gap + ph - (v - hlo) / (hhi - hlo) * ph;
     const s = svg(W, H); box.append(s);
     ch.stages.forEach(st => {
-      sv("rect", { x: X(st.from), y: top, width: Math.max(1, X(st.to) - X(st.from)), height: ph * 2 + gap, fill: stageColor(st.kind), "fill-opacity": st.kind === "recovery" || st.kind === "rest" ? .07 : .2 }, s);
+      sv("rect", { x: X(st.from), y: top, width: Math.max(1, X(st.to) - X(st.from)), height: ph * 2 + gap, fill: stageColor(st.kind), "fill-opacity": stageAlpha(st.kind) }, s);
       if (X(st.to) - X(st.from) > st.name.length * 7 + 8) { const t = sv("text", { x: X(st.from) + 4, y: top + 12 }, s); t.textContent = st.name; }
     });
     sv("path", { d: path(pts.map(p => p[1] ? [X(p[0]), YP(p[1])] : null)), fill: "none", stroke: css("--fg"), "stroke-width": 2, "stroke-linejoin": "round" }, s);
@@ -350,7 +355,7 @@ function renderFit() {
       const ser = fz.series;
       lineChart(b, `Fitness & fatigue, last ${ser.length} days`, [
         { pts: ser.map(r => [ms(r[0]), r[1]]), color: css("--accent"), label: () => "Fitness" },
-        { pts: ser.map(r => [ms(r[0]), r[2]]), color: css("--magenta"), alpha: .75, label: () => "Fatigue" }],
+        { pts: ser.map(r => [ms(r[0]), r[2]]), color: css("--red"), alpha: .75, label: () => "Fatigue" }],
         { zero: true, height: 110, axis: [[ms(ser[0][0]), shortDate(ser[0][0]), "start"], [ms(ser[ser.length - 1][0]), "today", "end"]],
           tip: k => { const r = ser[k]; return `${shortDate(r[0])}  ·  ${r[4] ? "Relative Effort " + Math.round(r[4]) : "no activity"}\nFitness ${r[1].toFixed(0)}  ·  Fatigue ${r[2].toFixed(0)}  ·  Form ${r[3] > 0 ? "+" : ""}${r[3].toFixed(0)}`; } });
     }

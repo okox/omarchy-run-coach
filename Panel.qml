@@ -35,14 +35,27 @@ Panel {
   readonly property color cGreen: pal("green", "#9ece6a")
   readonly property color cYellow: pal("yellow", "#e0af68")
   readonly property color cRed: pal("red", "#f7768e")
-  readonly property color cAccent: pal("accent", Commons.Color.accent)
+  // The look follows the shell, not the colour palette: a selected menu
+  // item's tint for surfaces, its text colour for titles and accents. On a
+  // stock theme that is the theme's own accent; on a customised shell it is
+  // whatever the menus and launcher use.
+  readonly property color selTint: Commons.Color.menu.selectedBackground
+  readonly property color cAccent: Commons.Color.menu.selectedText
+  readonly property color cTitle: Commons.Color.menu.selectedText
+  readonly property color cardFill: Qt.rgba(selTint.r, selTint.g, selTint.b, Math.max(0.05, selTint.a * 0.32))
+  readonly property color cardEdge: Qt.rgba(selTint.r, selTint.g, selTint.b, Math.min(0.45, Math.max(0.12, selTint.a * 1.3)))
   readonly property color cCyan: pal("cyan", "#449dab")
   readonly property color cOrange: pal("orange", "#eb927b")
   readonly property color cMagenta: pal("magenta", "#ad8ee6")
 
+  function mix(a, b, t) { return Qt.rgba(a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t, 1) }
+  // HR zones are ordered, so one ramp: the shell's selection tint (calm) to red (hot).
+  readonly property var zoneKeys: ["recovery", "easy", "steady", "threshold", "tempo_vo2", "interval"]
   function zoneColor(key) {
-    return ({ recovery: cCyan, easy: cGreen, steady: cYellow, threshold: cOrange,
-              tempo_vo2: cRed, interval: cMagenta })[key] || dim
+    var i = zoneKeys.indexOf(key)
+    if (i < 0) return dim
+    var calm = Qt.rgba(selTint.r, selTint.g, selTint.b, 1)
+    return i < 3 ? mix(calm, cAccent, i / 2) : mix(cAccent, cRed, (i - 2) / 3)
   }
 
   function stateColor(cls) {
@@ -480,405 +493,413 @@ Panel {
             Column {
               id: colPlan
               width: cols.usable * 0.34
-              spacing: Style.space(12)
-              SectionHead {
+              spacing: Style.space(14)
+              Card {
                 visible: root.cur !== null
-                key: "session"
-                title: root.st && root.st.current_is_today ? "Today" : "Next session"
-              }
-              Column {
-                width: parent.width
-                spacing: Style.space(12)
-                visible: root.cur !== null && root.isOpen("session")
-                // ---- Session hero ----
-                Item {
+                SectionHead {
                   visible: root.cur !== null
-                  width: parent.width
-                  implicitHeight: heroCol.implicitHeight
-
-                  Text {
-                    id: heroGlyph
-                    textFormat: Text.PlainText
-                    text: root.barInfo.glyph || "󰜎"
-                    color: root.barTint
-                    font.family: root.fontFamily
-                    font.pixelSize: Style.font.displayLarge
-                    anchors.left: parent.left
-                    anchors.top: parent.top
-                    anchors.topMargin: Style.space(2)
-                  }
-
-                  Column {
-                    id: heroCol
-                    anchors.left: heroGlyph.right
-                    anchors.leftMargin: Style.space(14)
-                    anchors.right: parent.right
-                    spacing: Style.space(3)
-
-                    Item {
-                      width: parent.width
-                      implicitHeight: heroTitle.implicitHeight
-                      PText {
-                        id: heroTitle
-                        width: parent.width - heroStatus.implicitWidth - Style.space(10)
-                        elide: Text.ElideRight
-                        font.pixelSize: Style.font.heading
-                        font.bold: true
-                        text: root.cur ? ((root.st.current_is_today ? "Today" : root.cur.dow + " " + root.cur.date.slice(8)) + " · " + root.cur.title) : ""
-                      }
-                      PText {
-                        id: heroStatus
-                        anchors.right: parent.right
-                        anchors.baseline: heroTitle.baseline
-                        color: root.cur ? root.stateColor(root.cur.status) : root.dim
-                        font.pixelSize: Style.font.body
-                        text: root.cur ? root.statusLabel(root.cur.status) + (root.cur.moved ? " · moved" : "") : ""
-                      }
-                    }
-                    PText {
-                      width: parent.width
-                      elide: Text.ElideRight
-                      color: root.dim
-                      font.pixelSize: Style.font.body
-                      text: root.cur ? [root.cur.id, "Week " + root.cur.week + " " + root.cur.phase,
-                                        root.cur.garmin ? "Watch: " + root.cur.garmin : ""].filter(function(x) { return x }).join("  ·  ") : ""
-                    }
-                    PText {
-                      visible: !!(root.st && root.st.today_rest)
-                      color: root.dim
-                      font.pixelSize: Style.font.body
-                      text: root.st && root.st.rest_note ? root.st.rest_note : "Rest day"
-                    }
-                    Column {
-                      width: parent.width
-                      topPadding: Style.space(4)
-                      spacing: Style.space(2)
-                      Repeater {
-                        model: root.cur ? root.cur.steps : []
-                        PText {
-                          required property var modelData
-                          width: parent.width
-                          wrapMode: Text.Wrap
-                          font.pixelSize: Style.font.body
-                          text: "·  " + modelData
-                        }
-                      }
-                    }
-                    PText {
-                      visible: !!(root.cur && root.cur.result)
-                      width: parent.width
-                      wrapMode: Text.Wrap
-                      color: root.cur && root.cur.result ? root.stateColor(root.cur.result.status) : root.foreground
-                      font.pixelSize: Style.font.body
-                      text: root.cur && root.cur.result ? root.cur.result.verdict : ""
-                    }
-                  }
-                }
-
-                // ---- Actions ----
-                Row {
-                  visible: root.cur !== null
-                  spacing: Style.space(6)
-                  Button {
-                    text: "Done"; iconText: "󰄬"; bordered: true; fontSize: Style.font.body
-                    onClicked: root.runCoach(["mark", "done", root.cur.id])
-                  }
-                  Button {
-                    text: "Skip"; iconText: "󰒭"; bordered: true; fontSize: Style.font.body
-                    onClicked: root.runCoach(["mark", "skip", root.cur.id])
-                  }
-                  Button {
-                    text: "Move to tomorrow"; iconText: "󰁔"; bordered: true; fontSize: Style.font.body
-                    onClicked: root.runCoach(["mark", "move", root.cur.id])
-                  }
-                  Button {
-                    visible: !!(root.cur && (root.cur.moved || root.cur.manual))
-                    text: "Undo"; iconText: "󰕌"; bordered: true; fontSize: Style.font.body
-                    onClicked: root.runCoach(["mark", "clear", root.cur.id])
-                  }
-                }
-              }
-              PanelSeparator { foreground: root.foreground }
-              // ---- Week ----
-              Column {
-                visible: root.week !== null
-                width: parent.width
-                spacing: Style.space(8)
-
-                Row {
-                  width: parent.width
-                  spacing: Style.space(6)
-                  Fold { key: "week"; anchors.verticalCenter: parent.verticalCenter }
-                  Item {
-                    width: parent.width - Style.space(22)
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.toggleSection("week") }
-                    implicitHeight: weekTitle.implicitHeight
-                    Row {
-                      spacing: Style.space(8)
-                      ArrowText {
-                        id: weekBack
-                        glyph: "󰅁"
-                        enabled: root.shownIdx > 0
-                        tip: "Previous week (h)"
-                        function go() { if (enabled) { root.weekIdx = root.shownIdx - 1; root.selDate = "" } }
-                        onActivated: go()
-                      }
-                      PText {
-                        id: weekTitle
-                        font.pixelSize: Style.font.heading
-                        font.bold: true
-                        text: root.week ? "Week " + root.week.number + (root.week.phase ? " · " + root.week.phase : "") : ""
-                      }
-                      ArrowText {
-                        id: weekFwd
-                        glyph: "󰅂"
-                        enabled: root.shownIdx >= 0 && root.shownIdx < root.weeks.length - 1
-                        tip: "Next week (l)"
-                        function go() { if (enabled) { root.weekIdx = root.shownIdx + 1; root.selDate = "" } }
-                        onActivated: go()
-                      }
-                    }
-                    PText {
-                      anchors.right: parent.right
-                      anchors.verticalCenter: parent.verticalCenter
-                      font.pixelSize: Style.font.bodySmall
-                      color: root.dim
-                      text: root.week ? root.week.km.toFixed(1) + "/" + root.week.target + " km · "
-                                        + root.week.done + "/" + root.week.planned + " sessions" : ""
-                    }
-                  }
+                  key: "session"
+                  title: root.st && root.st.current_is_today ? "Today" : "Next session"
                 }
                 Column {
                   width: parent.width
-                  spacing: Style.space(8)
-                  visible: root.isOpen("week")
-
-                  // Progress line
+                  spacing: Style.space(12)
+                  visible: root.cur !== null && root.isOpen("session")
+                  // ---- Session hero ----
                   Item {
+                    visible: root.cur !== null
                     width: parent.width
-                    height: Style.space(4)
-                    Rectangle {
-                      anchors.fill: parent
-                      radius: height / 2
-                      color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.1)
+                    implicitHeight: heroCol.implicitHeight
+
+                    Text {
+                      id: heroGlyph
+                      textFormat: Text.PlainText
+                      text: root.barInfo.glyph || "󰜎"
+                      color: root.barTint
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.font.displayLarge
+                      anchors.left: parent.left
+                      anchors.top: parent.top
+                      anchors.topMargin: Style.space(2)
                     }
-                    Rectangle {
-                      height: parent.height
-                      width: root.week ? parent.width * root.week.pct : 0
-                      radius: height / 2
-                      color: root.cAccent
-                      Behavior on width { NumberAnimation { duration: Style.duration(220); easing.type: Easing.OutCubic } }
+
+                    Column {
+                      id: heroCol
+                      anchors.left: heroGlyph.right
+                      anchors.leftMargin: Style.space(14)
+                      anchors.right: parent.right
+                      spacing: Style.space(3)
+
+                      Item {
+                        width: parent.width
+                        implicitHeight: heroTitle.implicitHeight
+                        PText {
+                          id: heroTitle
+                          width: parent.width - heroStatus.implicitWidth - Style.space(10)
+                          elide: Text.ElideRight
+                          font.pixelSize: Style.font.heading
+                          font.bold: true
+                          text: root.cur ? ((root.st.current_is_today ? "Today" : root.cur.dow + " " + root.cur.date.slice(8)) + " · " + root.cur.title) : ""
+                        }
+                        PText {
+                          id: heroStatus
+                          anchors.right: parent.right
+                          anchors.baseline: heroTitle.baseline
+                          color: root.cur ? root.stateColor(root.cur.status) : root.dim
+                          font.pixelSize: Style.font.body
+                          text: root.cur ? root.statusLabel(root.cur.status) + (root.cur.moved ? " · moved" : "") : ""
+                        }
+                      }
+                      PText {
+                        width: parent.width
+                        elide: Text.ElideRight
+                        color: root.dim
+                        font.pixelSize: Style.font.body
+                        text: root.cur ? [root.cur.id, "Week " + root.cur.week + " " + root.cur.phase,
+                                          root.cur.garmin ? "Watch: " + root.cur.garmin : ""].filter(function(x) { return x }).join("  ·  ") : ""
+                      }
+                      PText {
+                        visible: !!(root.st && root.st.today_rest)
+                        color: root.dim
+                        font.pixelSize: Style.font.body
+                        text: root.st && root.st.rest_note ? root.st.rest_note : "Rest day"
+                      }
+                      Column {
+                        width: parent.width
+                        topPadding: Style.space(4)
+                        spacing: Style.space(2)
+                        Repeater {
+                          model: root.cur ? root.cur.steps : []
+                          PText {
+                            required property var modelData
+                            width: parent.width
+                            wrapMode: Text.Wrap
+                            font.pixelSize: Style.font.body
+                            text: "·  " + modelData
+                          }
+                        }
+                      }
+                      PText {
+                        visible: !!(root.cur && root.cur.result)
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        color: root.cur && root.cur.result ? root.stateColor(root.cur.result.status) : root.foreground
+                        font.pixelSize: Style.font.body
+                        text: root.cur && root.cur.result ? root.cur.result.verdict : ""
+                      }
                     }
                   }
+
+                  // ---- Actions ----
+                  Row {
+                    visible: root.cur !== null
+                    spacing: Style.space(6)
+                    Button {
+                      text: "Done"; iconText: "󰄬"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.runCoach(["mark", "done", root.cur.id])
+                    }
+                    Button {
+                      text: "Skip"; iconText: "󰒭"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.runCoach(["mark", "skip", root.cur.id])
+                    }
+                    Button {
+                      text: "Move to tomorrow"; iconText: "󰁔"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.runCoach(["mark", "move", root.cur.id])
+                    }
+                    Button {
+                      visible: !!(root.cur && (root.cur.moved || root.cur.manual))
+                      text: "Undo"; iconText: "󰕌"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.runCoach(["mark", "clear", root.cur.id])
+                    }
+                  }
+                }
+              }
+              Card {
+                visible: root.week !== null
+                // ---- Week ----
+                Column {
+                  visible: root.week !== null
+                  width: parent.width
+                  spacing: Style.space(8)
 
                   Row {
-                    id: daysRow
                     width: parent.width
-                    Repeater {
-                      model: root.week ? root.week.days : []
-                      Item {
-                        id: dayCell
-                        required property var modelData
-                        readonly property bool selected: root.selDate === modelData.date
-                        width: daysRow.width / 7
-                        implicitHeight: dayCol.implicitHeight + Style.space(8)
-
-                        // Faint fill for the hovered or selected day; no box edge.
-                        Rectangle {
-                          anchors.fill: parent
-                          anchors.margins: Style.space(1)
-                          radius: Style.cornerRadius
-                          color: root.foreground
-                          opacity: dayCell.selected ? 0.09 : (dayMouse.containsMouse && root.dayClickable(dayCell.modelData) ? 0.05 : 0)
-                          Behavior on opacity { NumberAnimation { duration: Style.duration(120) } }
+                    spacing: Style.space(6)
+                    Fold { key: "week"; anchors.verticalCenter: parent.verticalCenter }
+                    Item {
+                      width: parent.width - Style.space(22)
+                      MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.toggleSection("week") }
+                      implicitHeight: weekTitle.implicitHeight
+                      Row {
+                        spacing: Style.space(8)
+                        ArrowText {
+                          id: weekBack
+                          glyph: "󰅁"
+                          enabled: root.shownIdx > 0
+                          tip: "Previous week (h)"
+                          function go() { if (enabled) { root.weekIdx = root.shownIdx - 1; root.selDate = "" } }
+                          onActivated: go()
                         }
-
-                        Column {
-                          id: dayCol
-                          y: Style.space(4)
-                          width: parent.width
-                          spacing: Style.space(3)
-                          PText {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            font.pixelSize: Style.font.bodySmall
-                            font.bold: dayCell.modelData.today || dayCell.selected
-                            color: dayCell.modelData.today || dayCell.selected ? root.foreground : root.dim
-                            text: dayCell.modelData.dow + " " + dayCell.modelData.day
-                          }
-                          Dot {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            status: dayCell.modelData.status
-                            ring: dayCell.modelData.today ? root.foreground : root.dim
-                          }
-                          PText {
-                            width: dayCell.width - Style.space(4)
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            horizontalAlignment: Text.AlignHCenter
-                            elide: Text.ElideRight
-                            font.pixelSize: Style.font.bodySmall
-                            color: dayCell.modelData.type === "rest" || dayCell.modelData.type === "none" ? root.dim : root.foreground
-                            text: dayCell.modelData.type === "rest" ? "Rest"
-                                  : dayCell.modelData.title
-                          }
-                          PText {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            font.pixelSize: Style.font.bodySmall
-                            color: root.dim
-                            text: dayCell.modelData.km > 0 ? dayCell.modelData.km.toFixed(1) + " km" : " "
-                          }
+                        PText {
+                          id: weekTitle
+                          font.pixelSize: Style.font.heading
+                          font.bold: true
+                          color: root.cTitle
+                          text: root.week ? "Week " + root.week.number + (root.week.phase ? " · " + root.week.phase : "") : ""
                         }
-
-                        MouseArea {
-                          id: dayMouse
-                          anchors.fill: parent
-                          hoverEnabled: true
-                          cursorShape: root.dayClickable(dayCell.modelData) ? Qt.PointingHandCursor : Qt.ArrowCursor
-                          onClicked: root.selectDay(dayCell.modelData)
+                        ArrowText {
+                          id: weekFwd
+                          glyph: "󰅂"
+                          enabled: root.shownIdx >= 0 && root.shownIdx < root.weeks.length - 1
+                          tip: "Next week (l)"
+                          function go() { if (enabled) { root.weekIdx = root.shownIdx + 1; root.selDate = "" } }
+                          onActivated: go()
                         }
-                        PanelToolTip {
-                          visible: dayMouse.containsMouse
-                          text: root.dayTip(dayCell.modelData)
-                        }
+                      }
+                      PText {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        font.pixelSize: Style.font.bodySmall
+                        color: root.dim
+                        text: root.week ? root.week.km.toFixed(1) + "/" + root.week.target + " km · "
+                                          + root.week.done + "/" + root.week.planned + " sessions" : ""
                       }
                     }
                   }
-
-                  // ---- Weekly volume over the whole plan ----
-                  // Outline = planned km, fill = run km. Click a past week to open it.
-                  Item {
-                    id: vol
-                    visible: volBars.count > 0
+                  Column {
                     width: parent.width
-                    height: Style.space(100)
-                    readonly property var vdata: root.st && root.st.volume ? root.st.volume : []
-                    readonly property real maxKm: {
-                      var m = 1
-                      for (var i = 0; i < vdata.length; i++) m = Math.max(m, vdata[i].target, vdata[i].km || 0)
-                      return m
+                    spacing: Style.space(8)
+                    visible: root.isOpen("week")
+
+                    // Progress line
+                    Item {
+                      width: parent.width
+                      height: Style.space(4)
+                      Rectangle {
+                        anchors.fill: parent
+                        radius: height / 2
+                        color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.1)
+                      }
+                      Rectangle {
+                        height: parent.height
+                        width: root.week ? parent.width * root.week.pct : 0
+                        radius: height / 2
+                        color: root.cAccent
+                        Behavior on width { NumberAnimation { duration: Style.duration(220); easing.type: Easing.OutCubic } }
+                      }
                     }
-                    readonly property real slot: vdata.length ? width / vdata.length : 0
-                    readonly property real gap: Style.space(2)
-                    readonly property real plotH: height - volLabel.height - Style.space(4)
 
-                    PText {
-                      id: volLabel
-                      font.pixelSize: Style.font.bodySmall
-                      color: root.dim
-                      text: "Weekly km  ·  plan to race day"
-                    }
+                    Row {
+                      id: daysRow
+                      width: parent.width
+                      Repeater {
+                        model: root.week ? root.week.days : []
+                        Item {
+                          id: dayCell
+                          required property var modelData
+                          readonly property bool selected: root.selDate === modelData.date
+                          width: daysRow.width / 7
+                          implicitHeight: dayCol.implicitHeight + Style.space(8)
 
-                    Repeater {
-                      id: volBars
-                      model: vol.vdata
-                      Item {
-                        id: wk
-                        required property var modelData
-                        required property int index
-                        readonly property bool past: modelData.km !== null && modelData.km !== undefined
-                        readonly property bool shown: root.week && root.week.number === modelData.week
-                        readonly property real tH: vol.plotH * modelData.target / vol.maxKm
-                        readonly property real aH: past ? vol.plotH * modelData.km / vol.maxKm : 0
-                        x: index * vol.slot
-                        y: vol.height - vol.plotH
-                        width: vol.slot
-                        height: vol.plotH
+                          // Faint fill for the hovered or selected day; no box edge.
+                          Rectangle {
+                            anchors.fill: parent
+                            anchors.margins: Style.space(1)
+                            radius: Style.cornerRadius
+                            color: root.foreground
+                            opacity: dayCell.selected ? 0.09 : (dayMouse.containsMouse && root.dayClickable(dayCell.modelData) ? 0.05 : 0)
+                            Behavior on opacity { NumberAnimation { duration: Style.duration(120) } }
+                          }
 
-                        // Planned km: thin outline, data-end rounded, on the baseline.
-                        Rectangle {
-                          x: vol.gap / 2; width: parent.width - vol.gap
-                          y: parent.height - wk.tH; height: wk.tH
-                          radius: Math.min(Style.space(4), width / 2)
-                          color: "transparent"
-                          border.width: 1
-                          border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, wk.shown ? 0.55 : 0.22)
-                        }
-                        // Run km.
-                        Rectangle {
-                          visible: wk.aH > 0
-                          x: vol.gap / 2; width: parent.width - vol.gap
-                          y: parent.height - wk.aH; height: wk.aH
-                          radius: Math.min(Style.space(4), width / 2)
-                          color: root.cAccent
-                          opacity: wk.shown ? 1 : (wkMouse.containsMouse ? 0.85 : 0.6)
-                        }
-                        MouseArea {
-                          id: wkMouse
-                          anchors.fill: parent
-                          hoverEnabled: true
-                          cursorShape: wk.past ? Qt.PointingHandCursor : Qt.ArrowCursor
-                          onClicked: {
-                            if (!wk.past) return
-                            for (var i = 0; i < root.weeks.length; i++)
-                              if (root.weeks[i].number === wk.modelData.week) { root.weekIdx = i; root.selDate = "" }
+                          Column {
+                            id: dayCol
+                            y: Style.space(4)
+                            width: parent.width
+                            spacing: Style.space(3)
+                            PText {
+                              anchors.horizontalCenter: parent.horizontalCenter
+                              font.pixelSize: Style.font.bodySmall
+                              font.bold: dayCell.modelData.today || dayCell.selected
+                              color: dayCell.modelData.today || dayCell.selected ? root.foreground : root.dim
+                              text: dayCell.modelData.dow + " " + dayCell.modelData.day
+                            }
+                            Dot {
+                              anchors.horizontalCenter: parent.horizontalCenter
+                              status: dayCell.modelData.status
+                              ring: dayCell.modelData.today ? root.foreground : root.dim
+                            }
+                            PText {
+                              width: dayCell.width - Style.space(4)
+                              anchors.horizontalCenter: parent.horizontalCenter
+                              horizontalAlignment: Text.AlignHCenter
+                              elide: Text.ElideRight
+                              font.pixelSize: Style.font.bodySmall
+                              color: dayCell.modelData.type === "rest" || dayCell.modelData.type === "none" ? root.dim : root.foreground
+                              text: dayCell.modelData.type === "rest" ? "Rest"
+                                    : dayCell.modelData.title
+                            }
+                            PText {
+                              anchors.horizontalCenter: parent.horizontalCenter
+                              font.pixelSize: Style.font.bodySmall
+                              color: root.dim
+                              text: dayCell.modelData.km > 0 ? dayCell.modelData.km.toFixed(1) + " km" : " "
+                            }
+                          }
+
+                          MouseArea {
+                            id: dayMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: root.dayClickable(dayCell.modelData) ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: root.selectDay(dayCell.modelData)
+                          }
+                          PanelToolTip {
+                            visible: dayMouse.containsMouse
+                            text: root.dayTip(dayCell.modelData)
                           }
                         }
-                        PanelToolTip {
-                          visible: wkMouse.containsMouse
-                          text: "Week " + wk.modelData.week + (wk.modelData.phase ? " · " + wk.modelData.phase : "")
-                                + "  (" + root.shortDate(wk.modelData.monday) + ")\n"
-                                + (wk.past ? wk.modelData.km.toFixed(1) + " of " + wk.modelData.target + " km planned"
-                                           : wk.modelData.target + " km planned")
+                      }
+                    }
+
+                    // ---- Weekly volume over the whole plan ----
+                    // Outline = planned km, fill = run km. Click a past week to open it.
+                    Item {
+                      id: vol
+                      visible: volBars.count > 0
+                      width: parent.width
+                      height: Style.space(100)
+                      readonly property var vdata: root.st && root.st.volume ? root.st.volume : []
+                      readonly property real maxKm: {
+                        var m = 1
+                        for (var i = 0; i < vdata.length; i++) m = Math.max(m, vdata[i].target, vdata[i].km || 0)
+                        return m
+                      }
+                      readonly property real slot: vdata.length ? width / vdata.length : 0
+                      readonly property real gap: Style.space(2)
+                      readonly property real plotH: height - volLabel.height - Style.space(4)
+
+                      PText {
+                        id: volLabel
+                        font.pixelSize: Style.font.bodySmall
+                        color: root.dim
+                        text: "Weekly km  ·  plan to race day"
+                      }
+
+                      Repeater {
+                        id: volBars
+                        model: vol.vdata
+                        Item {
+                          id: wk
+                          required property var modelData
+                          required property int index
+                          readonly property bool past: modelData.km !== null && modelData.km !== undefined
+                          readonly property bool shown: root.week && root.week.number === modelData.week
+                          readonly property real tH: vol.plotH * modelData.target / vol.maxKm
+                          readonly property real aH: past ? vol.plotH * modelData.km / vol.maxKm : 0
+                          x: index * vol.slot
+                          y: vol.height - vol.plotH
+                          width: vol.slot
+                          height: vol.plotH
+
+                          // Planned km: thin outline, data-end rounded, on the baseline.
+                          Rectangle {
+                            x: vol.gap / 2; width: parent.width - vol.gap
+                            y: parent.height - wk.tH; height: wk.tH
+                            radius: Math.min(Style.space(4), width / 2)
+                            color: "transparent"
+                            border.width: 1
+                            border.color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, wk.shown ? 0.55 : 0.22)
+                          }
+                          // Run km.
+                          Rectangle {
+                            visible: wk.aH > 0
+                            x: vol.gap / 2; width: parent.width - vol.gap
+                            y: parent.height - wk.aH; height: wk.aH
+                            radius: Math.min(Style.space(4), width / 2)
+                            color: root.cAccent
+                            opacity: wk.shown ? 1 : (wkMouse.containsMouse ? 0.85 : 0.6)
+                          }
+                          MouseArea {
+                            id: wkMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: wk.past ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: {
+                              if (!wk.past) return
+                              for (var i = 0; i < root.weeks.length; i++)
+                                if (root.weeks[i].number === wk.modelData.week) { root.weekIdx = i; root.selDate = "" }
+                            }
+                          }
+                          PanelToolTip {
+                            visible: wkMouse.containsMouse
+                            text: "Week " + wk.modelData.week + (wk.modelData.phase ? " · " + wk.modelData.phase : "")
+                                  + "  (" + root.shortDate(wk.modelData.monday) + ")\n"
+                                  + (wk.past ? wk.modelData.km.toFixed(1) + " of " + wk.modelData.target + " km planned"
+                                             : wk.modelData.target + " km planned")
+                          }
                         }
                       }
                     }
                   }
                 }
               }
-              PanelSeparator { foreground: root.foreground }
-              // ---- Race + next checkpoint ----
-              SectionHead { key: "race"; title: "Race" }
-              Item {
-                width: parent.width
-                implicitHeight: raceRow.implicitHeight
-                visible: root.isOpen("race")
-                Column {
-                  id: raceRow
+              Card {
+                visible: root.race !== null
+                // ---- Race + next checkpoint ----
+                SectionHead { key: "race"; title: "Race" }
+                Item {
                   width: parent.width
-                  spacing: Style.space(8)
-
+                  implicitHeight: raceRow.implicitHeight
+                  visible: root.isOpen("race")
                   Column {
+                    id: raceRow
                     width: parent.width
-                    spacing: Style.space(4)
-                    Row {
-                      spacing: Style.space(6)
-                      PText {
-                        font.pixelSize: Style.font.displayLarge
-                        font.bold: true
-                        color: root.cAccent
-                        text: root.race ? String(root.race.days) : ""
+                    spacing: Style.space(8)
+
+                    Column {
+                      width: parent.width
+                      spacing: Style.space(4)
+                      Row {
+                        spacing: Style.space(6)
+                        PText {
+                          font.pixelSize: Style.font.displayLarge
+                          font.bold: true
+                          color: root.cAccent
+                          text: root.race ? String(root.race.days) : ""
+                        }
+                        PText {
+                          anchors.bottom: parent.bottom
+                          anchors.bottomMargin: Style.space(4)
+                          font.pixelSize: Style.font.body
+                          color: root.dim
+                          text: "days to " + (root.race && root.race.short ? root.race.short : "race day")
+                        }
                       }
                       PText {
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: Style.space(4)
+                        width: parent.width
+                        elide: Text.ElideRight
                         font.pixelSize: Style.font.body
-                        color: root.dim
-                        text: "days to " + (root.race && root.race.short ? root.race.short : "race day")
+                        text: root.race ? root.shortDate(root.race.date) + "  ·  " + root.race.target + " (" + root.race.pace + ")" : ""
                       }
                     }
-                    PText {
-                      width: parent.width
-                      elide: Text.ElideRight
-                      font.pixelSize: Style.font.body
-                      text: root.race ? root.shortDate(root.race.date) + "  ·  " + root.race.target + " (" + root.race.pace + ")" : ""
-                    }
-                  }
 
-                  Column {
-                    visible: root.checkpoint !== null
-                    width: parent.width
-                    spacing: Style.space(2)
-                    PText {
+                    Column {
+                      visible: root.checkpoint !== null
                       width: parent.width
-                      wrapMode: Text.Wrap
-                      font.pixelSize: Style.font.bodySmall
-                      color: root.dim
-                      text: root.checkpoint ? "Next checkpoint " + (root.checkpoint.days === 0 ? "today" : "in " + root.checkpoint.days + " d") + " (" + root.shortDate(root.checkpoint.date) + ")" : ""
-                    }
-                    PText {
-                      width: parent.width
-                      wrapMode: Text.Wrap
-                      font.pixelSize: Style.font.body
-                      text: root.checkpoint ? root.checkpoint.test + "\n" + root.checkpoint.target : ""
+                      spacing: Style.space(2)
+                      PText {
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Style.font.bodySmall
+                        color: root.dim
+                        text: root.checkpoint ? "Next checkpoint " + (root.checkpoint.days === 0 ? "today" : "in " + root.checkpoint.days + " d") + " (" + root.shortDate(root.checkpoint.date) + ")" : ""
+                      }
+                      PText {
+                        width: parent.width
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Style.font.body
+                        text: root.checkpoint ? root.checkpoint.test + "\n" + root.checkpoint.target : ""
+                      }
                     }
                   }
                 }
@@ -888,244 +909,248 @@ Panel {
             Column {
               id: colRun
               width: cols.usable * 0.35
-              spacing: Style.space(12)
-              // ---- Run details: the clicked day, else the last run ----
-              Column {
+              spacing: Style.space(14)
+              Card {
                 visible: root.det !== null || root.selDay !== null
-                width: parent.width
-                spacing: Style.space(8)
-
-                Row {
-                  width: parent.width
-                  spacing: Style.space(6)
-                  Fold { key: "run"; anchors.verticalCenter: parent.verticalCenter }
-                  Item {
-                    width: parent.width - Style.space(22)
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.toggleSection("run") }
-                    implicitHeight: lrTitle.implicitHeight
-                    PText {
-                      id: lrTitle
-                      font.pixelSize: Style.font.heading
-                      font.bold: true
-                      text: root.selDay ? root.shortDate(root.selDay.date) : "Last run"
-                    }
-                    PText {
-                      anchors.right: closeSel.visible ? closeSel.left : parent.right
-                      anchors.rightMargin: closeSel.visible ? Style.space(10) : 0
-                      anchors.baseline: lrTitle.baseline
-                      width: parent.width - lrTitle.implicitWidth - Style.space(12) - (closeSel.visible ? closeSel.width + Style.space(10) : 0)
-                      horizontalAlignment: Text.AlignRight
-                      elide: Text.ElideRight
-                      font.pixelSize: Style.font.body
-                      color: root.dim
-                      text: root.det ? (root.selDay ? "" : root.shortDate(root.det.date) + " ") + root.det.time + "  ·  " + root.det.session
-                            : (root.selDay ? [root.selDay.id, root.selDay.title, root.statusMeaning(root.selDay)].filter(function(x) { return x }).join("  ·  ") : "")
-                    }
-                    ArrowText {
-                      id: closeSel
-                      visible: root.selDay !== null
-                      anchors.right: parent.right
-                      anchors.verticalCenter: lrTitle.verticalCenter
-                      glyph: "󰅖"
-                      tip: "Back to the last run (Esc)"
-                      onActivated: root.selDate = ""
-                    }
-                  }
-                }
+                // ---- Run details: the clicked day, else the last run ----
                 Column {
+                  visible: root.det !== null || root.selDay !== null
                   width: parent.width
                   spacing: Style.space(8)
-                  visible: root.isOpen("run")
 
-                  // A planned day without a run: its workout.
-                  Column {
-                    visible: !!(root.selDay && !root.selDay.run)
-                    width: parent.width
-                    spacing: Style.space(2)
-                    PText {
-                      visible: !!(root.selDay && root.selDay.garmin)
-                      font.pixelSize: Style.font.body
-                      color: root.dim
-                      text: root.selDay && root.selDay.garmin ? "Watch: " + root.selDay.garmin : ""
-                    }
-                    Repeater {
-                      model: root.selDay && !root.selDay.run ? root.selDay.steps : []
-                      PText {
-                        required property var modelData
-                        width: parent.width
-                        wrapMode: Text.Wrap
-                        font.pixelSize: Style.font.body
-                        text: "·  " + modelData
-                      }
-                    }
-                  }
-
-                  Grid {
-                    visible: root.det !== null
-                    columns: 4
-                    width: parent.width
-                    rowSpacing: Style.space(8)
-                    Repeater {
-                      model: root.det ? [
-                        ["Distance", root.det.distance_km.toFixed(2) + " km"],
-                        ["Time", root.det.duration],
-                        ["Pace", root.det.pace + " /km"],
-                        ["Avg HR", (root.det.avg_hr || "-") + (root.det.max_hr ? "  (max " + root.det.max_hr + ")" : "")],
-                        ["Above cap", root.det.pct_above_cap !== undefined ? root.det.pct_above_cap + "% > " + root.det.cap : "-"],
-                        ["Vertical ratio", root.det.vr ? root.det.vr + "%" : "-"],
-                        ["Cadence", root.det.cadence ? root.det.cadence + " spm" : "-"],
-                        ["Ground contact", root.det.gct ? root.det.gct + " ms" : "-"]
-                      ] : []
-                      Column {
-                        required property var modelData
-                        width: parent.width / 4
-                        spacing: Style.space(1)
-                        PText { font.pixelSize: Style.font.bodySmall; color: root.dim; text: modelData[0] }
-                        PText { font.pixelSize: Style.font.subtitle; text: modelData[1] }
-                      }
-                    }
-                  }
-
-                  PText {
-                    visible: root.det !== null
-                    width: parent.width
-                    wrapMode: Text.Wrap
-                    color: root.det ? root.stateColor(root.det.status) : root.foreground
-                    font.pixelSize: Style.font.body
-                    text: root.det ? root.det.verdict
-                          + (root.det.hr_after_10 !== undefined ? "  ·  HR after 10 min " + root.det.hr_after_10 : "")
-                          + ((root.det.notes || []).length ? "\n" + root.det.notes.join("\n") : "") : ""
-                  }
-
-                  // Coach note (Claude) and what Strava knows about the run
-                Column {
-                  visible: !!(root.det && (root.det.note || root.det.strava))
-                  width: parent.width
-                  spacing: Style.space(4)
                   Row {
-                    visible: !!(root.det && root.det.note)
-                    width: parent.width
-                    spacing: Style.space(8)
-                    PText { id: noteGlyph; font.pixelSize: Style.font.body; color: root.cAccent; text: "󰭹" }
-                    PText {
-                      width: parent.width - noteGlyph.width - Style.space(8)
-                      wrapMode: Text.Wrap
-                      font.pixelSize: Style.font.body
-                      text: root.det && root.det.note ? root.det.note : ""
-                    }
-                  }
-                  PText {
-                    visible: !!(root.det && root.det.strava)
-                    width: parent.width
-                    wrapMode: Text.Wrap
-                    font.pixelSize: Style.font.bodySmall
-                    color: root.dim
-                    text: {
-                      var v = root.det ? root.det.strava : null
-                      if (!v) return ""
-                      return ["Strava: " + v.name, v.description, v.relative_effort ? "Relative Effort " + Math.round(v.relative_effort) : "",
-                              v.kudos ? v.kudos + " kudos" : "", v.gear || ""].filter(function(x) { return x }).join("  ·  ")
-                    }
-                  }
-                }
-                Column {
-                    width: parent.width
-                    spacing: Style.space(2)
-                    visible: !!(root.det && root.det.reps && root.det.reps.length)
-                    Repeater {
-                      model: root.det && root.det.reps ? root.det.reps : []
-                      PText {
-                        required property var modelData
-                        required property int index
-                        font.pixelSize: Style.font.bodySmall
-                        color: modelData.ok ? root.foreground : root.cYellow
-                        text: (modelData.ok ? "󰄬  " : "󰅖  ") + (index + 1) + ". " + modelData.name + "   " + modelData.pace
-                              + "/km  HR " + (modelData.hr || "-") + "   target " + modelData.target
-                      }
-                    }
-                  }
-
-                  // ---- HR zones ----
-                  Column {
-                    visible: !!(root.det && root.det.zones)
                     width: parent.width
                     spacing: Style.space(6)
-                    topPadding: Style.space(4)
+                    Fold { key: "run"; anchors.verticalCenter: parent.verticalCenter }
+                    Item {
+                      width: parent.width - Style.space(22)
+                      MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.toggleSection("run") }
+                      implicitHeight: lrTitle.implicitHeight
+                      PText {
+                        id: lrTitle
+                        font.pixelSize: Style.font.heading
+                        font.bold: true
+                        color: root.cTitle
+                        text: root.selDay ? root.shortDate(root.selDay.date) : "Last run"
+                      }
+                      PText {
+                        anchors.right: closeSel.visible ? closeSel.left : parent.right
+                        anchors.rightMargin: closeSel.visible ? Style.space(10) : 0
+                        anchors.baseline: lrTitle.baseline
+                        width: parent.width - lrTitle.implicitWidth - Style.space(12) - (closeSel.visible ? closeSel.width + Style.space(10) : 0)
+                        horizontalAlignment: Text.AlignRight
+                        elide: Text.ElideRight
+                        font.pixelSize: Style.font.body
+                        color: root.dim
+                        text: root.det ? (root.selDay ? "" : root.shortDate(root.det.date) + " ") + root.det.time + "  ·  " + root.det.session
+                              : (root.selDay ? [root.selDay.id, root.selDay.title, root.statusMeaning(root.selDay)].filter(function(x) { return x }).join("  ·  ") : "")
+                      }
+                      ArrowText {
+                        id: closeSel
+                        visible: root.selDay !== null
+                        anchors.right: parent.right
+                        anchors.verticalCenter: lrTitle.verticalCenter
+                        glyph: "󰅖"
+                        tip: "Back to the last run (Esc)"
+                        onActivated: root.selDate = ""
+                      }
+                    }
+                  }
+                  Column {
+                    width: parent.width
+                    spacing: Style.space(8)
+                    visible: root.isOpen("run")
 
-                    PText { font.pixelSize: Style.font.body; font.bold: true; text: "Time in HR zones" }
-
-                    // One bar split by zone.
-                    Row {
-                      id: zoneBar
+                    // A planned day without a run: its workout.
+                    Column {
+                      visible: !!(root.selDay && !root.selDay.run)
                       width: parent.width
-                      height: Style.space(8)
+                      spacing: Style.space(2)
+                      PText {
+                        visible: !!(root.selDay && root.selDay.garmin)
+                        font.pixelSize: Style.font.body
+                        color: root.dim
+                        text: root.selDay && root.selDay.garmin ? "Watch: " + root.selDay.garmin : ""
+                      }
                       Repeater {
-                        model: root.det && root.det.zones ? root.det.zones : []
-                        Rectangle {
+                        model: root.selDay && !root.selDay.run ? root.selDay.steps : []
+                        PText {
                           required property var modelData
-                          required property int index
-                          readonly property real total: {
-                            var t = 0
-                            var zs = root.det.zones
-                            for (var i = 0; i < zs.length; i++) t += zs[i].secs
-                            return t || 1
-                          }
-                          width: zoneBar.width * modelData.secs / total
-                          height: zoneBar.height
-                          color: root.zoneColor(modelData.key)
-                          opacity: 0.85
-                          radius: index === 0 || index === root.det.zones.length - 1 ? height / 2 : 0
-                          MouseArea { id: segMouse; anchors.fill: parent; hoverEnabled: true }
-                          PanelToolTip {
-                            visible: segMouse.containsMouse
-                            text: modelData.name + " (" + modelData.label + " bpm): " + modelData.time + ", " + modelData.pct + "%"
-                          }
+                          width: parent.width
+                          wrapMode: Text.Wrap
+                          font.pixelSize: Style.font.body
+                          text: "·  " + modelData
                         }
                       }
                     }
 
                     Grid {
-                      columns: 2
+                      visible: root.det !== null
+                      columns: 4
                       width: parent.width
-                      rowSpacing: Style.space(3)
+                      rowSpacing: Style.space(8)
                       Repeater {
-                        model: root.det && root.det.zones ? root.det.zones : []
-                        Row {
+                        model: root.det ? [
+                          ["Distance", root.det.distance_km.toFixed(2) + " km"],
+                          ["Time", root.det.duration],
+                          ["Pace", root.det.pace + " /km"],
+                          ["Avg HR", (root.det.avg_hr || "-") + (root.det.max_hr ? "  (max " + root.det.max_hr + ")" : "")],
+                          ["Above cap", root.det.pct_above_cap !== undefined ? root.det.pct_above_cap + "% > " + root.det.cap : "-"],
+                          ["Vertical ratio", root.det.vr ? root.det.vr + "%" : "-"],
+                          ["Cadence", root.det.cadence ? root.det.cadence + " spm" : "-"],
+                          ["Ground contact", root.det.gct ? root.det.gct + " ms" : "-"]
+                        ] : []
+                        Column {
                           required property var modelData
-                          width: parent.width / 2
-                          spacing: Style.space(6)
+                          width: parent.width / 4
+                          spacing: Style.space(1)
+                          PText { font.pixelSize: Style.font.bodySmall; color: root.dim; text: modelData[0] }
+                          PText { font.pixelSize: Style.font.subtitle; text: modelData[1] }
+                        }
+                      }
+                    }
+
+                    PText {
+                      visible: root.det !== null
+                      width: parent.width
+                      wrapMode: Text.Wrap
+                      color: root.det ? root.stateColor(root.det.status) : root.foreground
+                      font.pixelSize: Style.font.body
+                      text: root.det ? root.det.verdict
+                            + (root.det.hr_after_10 !== undefined ? "  ·  HR after 10 min " + root.det.hr_after_10 : "")
+                            + ((root.det.notes || []).length ? "\n" + root.det.notes.join("\n") : "") : ""
+                    }
+
+                    // Coach note (Claude) and what Strava knows about the run
+                  Column {
+                    visible: !!(root.det && (root.det.note || root.det.strava))
+                    width: parent.width
+                    spacing: Style.space(4)
+                    Row {
+                      visible: !!(root.det && root.det.note)
+                      width: parent.width
+                      spacing: Style.space(8)
+                      PText { id: noteGlyph; font.pixelSize: Style.font.body; color: root.cAccent; text: "󰭹" }
+                      PText {
+                        width: parent.width - noteGlyph.width - Style.space(8)
+                        wrapMode: Text.Wrap
+                        font.pixelSize: Style.font.body
+                        text: root.det && root.det.note ? root.det.note : ""
+                      }
+                    }
+                    PText {
+                      visible: !!(root.det && root.det.strava)
+                      width: parent.width
+                      wrapMode: Text.Wrap
+                      font.pixelSize: Style.font.bodySmall
+                      color: root.dim
+                      text: {
+                        var v = root.det ? root.det.strava : null
+                        if (!v) return ""
+                        return ["Strava: " + v.name, v.description, v.relative_effort ? "Relative Effort " + Math.round(v.relative_effort) : "",
+                                v.kudos ? v.kudos + " kudos" : "", v.gear || ""].filter(function(x) { return x }).join("  ·  ")
+                      }
+                    }
+                  }
+                  Column {
+                      width: parent.width
+                      spacing: Style.space(2)
+                      visible: !!(root.det && root.det.reps && root.det.reps.length)
+                      Repeater {
+                        model: root.det && root.det.reps ? root.det.reps : []
+                        PText {
+                          required property var modelData
+                          required property int index
+                          font.pixelSize: Style.font.bodySmall
+                          color: modelData.ok ? root.foreground : root.cYellow
+                          text: (modelData.ok ? "󰄬  " : "󰅖  ") + (index + 1) + ". " + modelData.name + "   " + modelData.pace
+                                + "/km  HR " + (modelData.hr || "-") + "   target " + modelData.target
+                        }
+                      }
+                    }
+
+                    // ---- HR zones ----
+                    Column {
+                      visible: !!(root.det && root.det.zones)
+                      width: parent.width
+                      spacing: Style.space(6)
+                      topPadding: Style.space(4)
+
+                      PText { font.pixelSize: Style.font.body; font.bold: true; text: "Time in HR zones" }
+
+                      // One bar split by zone.
+                      Row {
+                        id: zoneBar
+                        width: parent.width
+                        height: Style.space(8)
+                        Repeater {
+                          model: root.det && root.det.zones ? root.det.zones : []
                           Rectangle {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: Style.space(7); height: width; radius: width / 2
+                            required property var modelData
+                            required property int index
+                            readonly property real total: {
+                              var t = 0
+                              var zs = root.det.zones
+                              for (var i = 0; i < zs.length; i++) t += zs[i].secs
+                              return t || 1
+                            }
+                            width: zoneBar.width * modelData.secs / total
+                            height: zoneBar.height
                             color: root.zoneColor(modelData.key)
+                            opacity: 0.85
+                            radius: index === 0 || index === root.det.zones.length - 1 ? height / 2 : 0
+                            MouseArea { id: segMouse; anchors.fill: parent; hoverEnabled: true }
+                            PanelToolTip {
+                              visible: segMouse.containsMouse
+                              text: modelData.name + " (" + modelData.label + " bpm): " + modelData.time + ", " + modelData.pct + "%"
+                            }
                           }
-                          PText {
-                            font.pixelSize: Style.font.bodySmall
-                            color: modelData.secs > 0 ? root.foreground : root.dim
-                            text: modelData.name + " " + modelData.label
-                          }
-                          PText {
-                            font.pixelSize: Style.font.bodySmall
-                            color: root.dim
-                            text: modelData.time + " · " + modelData.pct + "%"
+                        }
+                      }
+
+                      Grid {
+                        columns: 2
+                        width: parent.width
+                        rowSpacing: Style.space(3)
+                        Repeater {
+                          model: root.det && root.det.zones ? root.det.zones : []
+                          Row {
+                            required property var modelData
+                            width: parent.width / 2
+                            spacing: Style.space(6)
+                            Rectangle {
+                              anchors.verticalCenter: parent.verticalCenter
+                              width: Style.space(7); height: width; radius: width / 2
+                              color: root.zoneColor(modelData.key)
+                            }
+                            PText {
+                              font.pixelSize: Style.font.bodySmall
+                              color: modelData.secs > 0 ? root.foreground : root.dim
+                              text: modelData.name + " " + modelData.label
+                            }
+                            PText {
+                              font.pixelSize: Style.font.bodySmall
+                              color: root.dim
+                              text: modelData.time + " · " + modelData.pct + "%"
+                            }
                           }
                         }
                       }
                     }
-                  }
 
-                  // ---- Pace and HR along the run, stages shaded behind ----
-                  RunChart {
-                    visible: !!(root.det && root.det.chart)
-                    width: parent.width
-                    chart: root.det && root.det.chart ? root.det.chart : null
-                  }
+                    // ---- Pace and HR along the run, stages shaded behind ----
+                    RunChart {
+                      visible: !!(root.det && root.det.chart)
+                      width: parent.width
+                      chart: root.det && root.det.chart ? root.det.chart : null
+                    }
 
-                  PText {
-                    visible: root.det !== null
-                    font.pixelSize: Style.font.bodySmall
-                    color: root.dim
-                    text: root.det ? "From " + root.det.source + (root.det.runs > 1 ? " · " + root.det.runs + " runs combined" : "") : ""
+                    PText {
+                      visible: root.det !== null
+                      font.pixelSize: Style.font.bodySmall
+                      color: root.dim
+                      text: root.det ? "From " + root.det.source + (root.det.runs > 1 ? " · " + root.det.runs + " runs combined" : "") : ""
+                    }
                   }
                 }
               }
@@ -1134,170 +1159,175 @@ Panel {
             Column {
               id: colFit
               width: cols.usable * 0.31
-              spacing: Style.space(12)
-              // ---- Fitness (Garmin's own numbers) ----
-              Column {
+              spacing: Style.space(14)
+              Card {
                 visible: root.fit !== null
-                width: parent.width
-                spacing: Style.space(8)
-
-                Row {
+                // ---- Fitness (Garmin's own numbers) ----
+                Column {
+                  visible: root.fit !== null
                   width: parent.width
-                  spacing: Style.space(6)
-                  Fold { key: "fitness"; anchors.verticalCenter: parent.verticalCenter }
-                  Item {
-                    width: parent.width - Style.space(22)
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.toggleSection("fitness") }
-                    implicitHeight: fitTitle.implicitHeight
-                    PText { id: fitTitle; font.pixelSize: Style.font.heading; font.bold: true; text: "Garmin" }
+                  spacing: Style.space(8)
+
+                  Row {
+                    width: parent.width
+                    spacing: Style.space(6)
+                    Fold { key: "fitness"; anchors.verticalCenter: parent.verticalCenter }
+                    Item {
+                      width: parent.width - Style.space(22)
+                      MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.toggleSection("fitness") }
+                      implicitHeight: fitTitle.implicitHeight
+                      PText { id: fitTitle; font.pixelSize: Style.font.heading; font.bold: true; color: root.cTitle; text: "Garmin" }
+                      PText {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        font.pixelSize: Style.font.bodySmall
+                        color: root.dim
+                        text: root.fit && root.fit.fetched ? "fitness · updated " + root.ago(root.fit.fetched) : "fitness"
+                      }
+                    }
+                  }
+                  Column {
+                    width: parent.width
+                    spacing: Style.space(8)
+                    visible: root.isOpen("fitness")
+
+                    Grid {
+                      columns: 4
+                      width: parent.width
+                      rowSpacing: Style.space(8)
+                      Repeater {
+                        model: root.fit ? root.fitStats() : []
+                        Item {
+                          required property var modelData
+                          width: parent.width / 4
+                          implicitHeight: statCol.implicitHeight
+                          Column {
+                            id: statCol
+                            spacing: Style.space(1)
+                            PText { font.pixelSize: Style.font.bodySmall; color: root.dim; text: modelData[0] }
+                            PText { font.pixelSize: Style.font.subtitle; text: modelData[1] }
+                          }
+                          MouseArea { id: statMouse; anchors.fill: parent; hoverEnabled: true }
+                          PanelToolTip { visible: statMouse.containsMouse && modelData[2] !== ""; text: modelData[2] }
+                        }
+                      }
+                    }
+
                     PText {
-                      anchors.right: parent.right
-                      anchors.verticalCenter: parent.verticalCenter
-                      font.pixelSize: Style.font.bodySmall
-                      color: root.dim
-                      text: root.fit && root.fit.fetched ? "fitness · updated " + root.ago(root.fit.fetched) : "fitness"
+                      visible: !!(root.fit && root.fit.balance)
+                      width: parent.width
+                      wrapMode: Text.Wrap
+                      font.pixelSize: Style.font.body
+                      color: root.fit && root.fit.balance && root.fit.balance.phrase.indexOf("Balanced") < 0 ? root.cYellow : root.foreground
+                      text: root.fit && root.fit.balance ? "Load: " + (root.fit.status ? root.fit.status + " · " : "") + root.fit.balance.phrase : ""
+                      MouseArea { id: balMouse; anchors.fill: parent; hoverEnabled: true }
+                      PanelToolTip {
+                        visible: balMouse.containsMouse
+                        text: {
+                          var b = root.fit ? root.fit.balance : null
+                          if (!b) return ""
+                          function row(n, v) { return n + ": " + v[0] + "  (target " + v[1] + "-" + v[2] + ")" }
+                          return "Last 4 weeks of training load\n" + row("Low aerobic (easy)", b.low) + "\n"
+                                 + row("High aerobic (tempo/threshold)", b.high) + "\n" + row("Anaerobic", b.anaerobic)
+                                 + (root.fit.acwr ? "\nAcute/chronic ratio " + root.fit.acwr + " (" + root.fit.acwr_status + ")" : "")
+                        }
+                      }
+                    }
+
+                    TrendChart {
+                      visible: !!(root.fit && root.fit.trend && root.fit.trend.length > 1)
+                      width: parent.width
+                      fit: root.fit
                     }
                   }
                 }
+              }
+              Card {
+                visible: root.strava !== null
+                // ---- Strava: Fitness / Fatigue / Form (Strava's method) + predictions ----
+                SectionHead {
+                  visible: root.strava !== null
+                  key: "strava"
+                  title: "Strava"
+                  rightText: "fitness · from your Relative Effort"
+                  rightTip: "Strava doesn't share its Fitness score, race predictions or AI comments with other apps.\nThese use Strava's method on your Strava data: Fitness = 42-day and Fatigue = 7-day\nweighted averages of daily Relative Effort, Form = Fitness - Fatigue.\nRace predictions: Riegel formula from your best efforts in the last 6 weeks."
+                }
                 Column {
+                  visible: root.strava !== null && root.isOpen("strava")
                   width: parent.width
                   spacing: Style.space(8)
-                  visible: root.isOpen("fitness")
 
                   Grid {
                     columns: 4
                     width: parent.width
                     rowSpacing: Style.space(8)
                     Repeater {
-                      model: root.fit ? root.fitStats() : []
+                      model: root.strava ? root.stravaStats() : []
                       Item {
                         required property var modelData
                         width: parent.width / 4
-                        implicitHeight: statCol.implicitHeight
+                        implicitHeight: sCol.implicitHeight
                         Column {
-                          id: statCol
+                          id: sCol
                           spacing: Style.space(1)
                           PText { font.pixelSize: Style.font.bodySmall; color: root.dim; text: modelData[0] }
                           PText { font.pixelSize: Style.font.subtitle; text: modelData[1] }
                         }
-                        MouseArea { id: statMouse; anchors.fill: parent; hoverEnabled: true }
-                        PanelToolTip { visible: statMouse.containsMouse && modelData[2] !== ""; text: modelData[2] }
+                        MouseArea { id: sMouse; anchors.fill: parent; hoverEnabled: true }
+                        PanelToolTip { visible: sMouse.containsMouse; text: modelData[2] }
                       }
                     }
+                  }
+
+                  FitnessChart {
+                    visible: !!(root.strava && root.strava.fitness)
+                    width: parent.width
+                    fitness: root.strava ? root.strava.fitness : null
                   }
 
                   PText {
-                    visible: !!(root.fit && root.fit.balance)
-                    width: parent.width
-                    wrapMode: Text.Wrap
+                    visible: !!(root.strava && root.strava.predictions)
                     font.pixelSize: Style.font.body
-                    color: root.fit && root.fit.balance && root.fit.balance.phrase.indexOf("Balanced") < 0 ? root.cYellow : root.foreground
-                    text: root.fit && root.fit.balance ? "Load: " + (root.fit.status ? root.fit.status + " · " : "") + root.fit.balance.phrase : ""
-                    MouseArea { id: balMouse; anchors.fill: parent; hoverEnabled: true }
-                    PanelToolTip {
-                      visible: balMouse.containsMouse
-                      text: {
-                        var b = root.fit ? root.fit.balance : null
-                        if (!b) return ""
-                        function row(n, v) { return n + ": " + v[0] + "  (target " + v[1] + "-" + v[2] + ")" }
-                        return "Last 4 weeks of training load\n" + row("Low aerobic (easy)", b.low) + "\n"
-                               + row("High aerobic (tempo/threshold)", b.high) + "\n" + row("Anaerobic", b.anaerobic)
-                               + (root.fit.acwr ? "\nAcute/chronic ratio " + root.fit.acwr + " (" + root.fit.acwr_status + ")" : "")
-                      }
-                    }
+                    font.bold: true
+                    text: "Race predictions"
                   }
-
-                  TrendChart {
-                    visible: !!(root.fit && root.fit.trend && root.fit.trend.length > 1)
+                  Grid {
+                    visible: !!(root.strava && root.strava.predictions)
+                    columns: 4
                     width: parent.width
-                    fit: root.fit
-                  }
-                }
-              }
-              PanelSeparator { foreground: root.foreground; visible: root.fit !== null && root.strava !== null }
-              // ---- Strava: Fitness / Fatigue / Form (Strava's method) + predictions ----
-              SectionHead {
-                visible: root.strava !== null
-                key: "strava"
-                title: "Strava"
-                rightText: "fitness · from your Relative Effort"
-                rightTip: "Strava doesn't share its Fitness score, race predictions or AI comments with other apps.\nThese use Strava's method on your Strava data: Fitness = 42-day and Fatigue = 7-day\nweighted averages of daily Relative Effort, Form = Fitness - Fatigue.\nRace predictions: Riegel formula from your best efforts in the last 6 weeks."
-              }
-              Column {
-                visible: root.strava !== null && root.isOpen("strava")
-                width: parent.width
-                spacing: Style.space(8)
-
-                Grid {
-                  columns: 4
-                  width: parent.width
-                  rowSpacing: Style.space(8)
-                  Repeater {
-                    model: root.strava ? root.stravaStats() : []
-                    Item {
-                      required property var modelData
-                      width: parent.width / 4
-                      implicitHeight: sCol.implicitHeight
-                      Column {
-                        id: sCol
-                        spacing: Style.space(1)
-                        PText { font.pixelSize: Style.font.bodySmall; color: root.dim; text: modelData[0] }
-                        PText { font.pixelSize: Style.font.subtitle; text: modelData[1] }
-                      }
-                      MouseArea { id: sMouse; anchors.fill: parent; hoverEnabled: true }
-                      PanelToolTip { visible: sMouse.containsMouse; text: modelData[2] }
-                    }
-                  }
-                }
-
-                FitnessChart {
-                  visible: !!(root.strava && root.strava.fitness)
-                  width: parent.width
-                  fitness: root.strava ? root.strava.fitness : null
-                }
-
-                PText {
-                  visible: !!(root.strava && root.strava.predictions)
-                  font.pixelSize: Style.font.body
-                  font.bold: true
-                  text: "Race predictions"
-                }
-                Grid {
-                  visible: !!(root.strava && root.strava.predictions)
-                  columns: 4
-                  width: parent.width
-                  Repeater {
-                    model: root.strava && root.strava.predictions ? root.strava.predictions : []
-                    Item {
-                      required property var modelData
-                      width: parent.width / 4
-                      implicitHeight: pCol.implicitHeight
-                      Column {
-                        id: pCol
-                        spacing: Style.space(1)
-                        PText { font.pixelSize: Style.font.bodySmall; color: root.dim; text: modelData.race }
-                        PText {
-                          font.pixelSize: Style.font.subtitle
-                          color: modelData.race === "Marathon" && root.strava.goal_s && modelData.secs <= root.strava.goal_s ? root.cGreen : root.foreground
-                          text: root.hms(modelData.secs)
+                    Repeater {
+                      model: root.strava && root.strava.predictions ? root.strava.predictions : []
+                      Item {
+                        required property var modelData
+                        width: parent.width / 4
+                        implicitHeight: pCol.implicitHeight
+                        Column {
+                          id: pCol
+                          spacing: Style.space(1)
+                          PText { font.pixelSize: Style.font.bodySmall; color: root.dim; text: modelData.race }
+                          PText {
+                            font.pixelSize: Style.font.subtitle
+                            color: modelData.race === "Marathon" && root.strava.goal_s && modelData.secs <= root.strava.goal_s ? root.cGreen : root.foreground
+                            text: root.hms(modelData.secs)
+                          }
+                        }
+                        MouseArea { id: pMouse; anchors.fill: parent; hoverEnabled: true }
+                        PanelToolTip {
+                          visible: pMouse.containsMouse
+                          text: "From your best " + modelData.from + "\n(training efforts, so on the slow side)"
+                                + (modelData.race === "Marathon" && root.strava.goal_s ? "\nGoal " + root.hms(root.strava.goal_s) : "")
                         }
                       }
-                      MouseArea { id: pMouse; anchors.fill: parent; hoverEnabled: true }
-                      PanelToolTip {
-                        visible: pMouse.containsMouse
-                        text: "From your best " + modelData.from + "\n(training efforts, so on the slow side)"
-                              + (modelData.race === "Marathon" && root.strava.goal_s ? "\nGoal " + root.hms(root.strava.goal_s) : "")
-                      }
                     }
                   }
-                }
-                PText {
-                  visible: !!(root.strava && root.strava.notes_error)
-                  width: parent.width
-                  wrapMode: Text.Wrap
-                  font.pixelSize: Style.font.bodySmall
-                  color: root.cYellow
-                  text: root.strava && root.strava.notes_error ? "Coach notes: " + root.strava.notes_error : ""
+                  PText {
+                    visible: !!(root.strava && root.strava.notes_error)
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Style.font.bodySmall
+                    color: root.cYellow
+                    text: root.strava && root.strava.notes_error ? "Coach notes: " + root.strava.notes_error : ""
+                  }
                 }
               }
             }
@@ -1427,7 +1457,7 @@ Panel {
     }
     function xOf(km) { return plotW * km / totalKm }
     function stageColor(kind) {
-      return ({ warmup: root.cCyan, active: root.cGreen, interval: root.cOrange, recovery: root.dim,
+      return ({ warmup: root.cAccent, active: root.foreground, interval: root.cRed, recovery: root.dim,
                 cooldown: root.cAccent, rest: root.dim })[kind] || root.dim
     }
     function pointAt(px) {
@@ -1460,7 +1490,7 @@ Panel {
         width: Math.max(1, rc.xOf(modelData.to) - rc.xOf(modelData.from))
         height: rc.plotH * 2 + rc.gapH
         color: rc.stageColor(modelData.kind)
-        opacity: modelData.kind === "recovery" || modelData.kind === "rest" ? 0.07 : 0.2
+        opacity: ({ warmup: 0.12, cooldown: 0.12, active: 0.05, interval: 0.2 })[modelData.kind] || 0.04
       }
     }
     // stage names, on top of the tints (not inside them, so they stay opaque)
@@ -1714,7 +1744,7 @@ Panel {
     Row {
       spacing: Style.space(6)
       Fold { key: sh.key; anchors.verticalCenter: parent.verticalCenter }
-      PText { id: shTitle; font.pixelSize: Style.font.heading; font.bold: true; text: sh.title }
+      PText { id: shTitle; font.pixelSize: Style.font.heading; font.bold: true; color: root.cTitle; text: sh.title }
     }
     PText {
       id: shRight
@@ -1764,21 +1794,27 @@ Panel {
           }
           ctx.stroke()
         }
-        line(root.cMagenta, 2, 0.75)   // fatigue
+        line(root.cRed, 2, 0.75)       // fatigue
         line(root.cAccent, 1, 1)       // fitness
       }
     }
-    // direct labels at the line ends instead of a legend
+    // direct labels at the line ends instead of a legend; when the two ends
+    // are close, the upper line's label goes above and the other below.
+    readonly property real endFit: ser.length ? yOf(ser[ser.length - 1][1]) : 0
+    readonly property real endFat: ser.length ? yOf(ser[ser.length - 1][2]) : 0
+    readonly property real labelH: fitLabel.implicitHeight
+    readonly property bool close: Math.abs(endFit - endFat) < labelH
+    readonly property real mid: (endFit + endFat) / 2
     PText {
+      id: fitLabel
       x: fc.plotW + Style.space(6)
-      y: fcCanvas.y + (fc.ser.length ? fc.yOf(fc.ser[fc.ser.length - 1][1]) : 0) - height / 2
+      y: fcCanvas.y + (fc.close ? (fc.endFit <= fc.endFat ? fc.mid - fc.labelH : fc.mid) : fc.endFit - height / 2)
       font.pixelSize: Style.font.bodySmall; color: root.cAccent; text: "Fitness"
     }
     PText {
       x: fc.plotW + Style.space(6)
-      y: fcCanvas.y + (fc.ser.length ? fc.yOf(fc.ser[fc.ser.length - 1][2]) : 0) - height / 2
-         + (fc.ser.length && Math.abs(fc.yOf(fc.ser[fc.ser.length - 1][2]) - fc.yOf(fc.ser[fc.ser.length - 1][1])) < height ? height : 0)
-      font.pixelSize: Style.font.bodySmall; color: root.cMagenta; text: "Fatigue"
+      y: fcCanvas.y + (fc.close ? (fc.endFit <= fc.endFat ? fc.mid : fc.mid - fc.labelH) : fc.endFat - height / 2)
+      font.pixelSize: Style.font.bodySmall; color: root.cRed; text: "Fatigue"
     }
     Item {
       id: fcAxis
@@ -1812,6 +1848,25 @@ Panel {
         return root.shortDate(r[0]) + (r[4] ? "  ·  Relative Effort " + Math.round(r[4]) : "  ·  no activity")
                + "\nFitness " + r[1].toFixed(0) + "  ·  Fatigue " + r[2].toFixed(0) + "  ·  Form " + (r[3] > 0 ? "+" : "") + r[3].toFixed(0)
       }
+    }
+  }
+
+  // A section's surface: faint fill and edge from the theme, no glow, no accent bar.
+  component Card: Rectangle {
+    id: card
+    default property alias content: cardCol.data
+    readonly property real pad: Style.space(14)
+    width: parent ? parent.width : 0
+    implicitHeight: cardCol.implicitHeight + pad * 2
+    radius: Style.space(12)
+    color: root.cardFill
+    border.width: 1
+    border.color: root.cardEdge
+    Column {
+      id: cardCol
+      x: card.pad; y: card.pad
+      width: card.width - card.pad * 2
+      spacing: Style.space(12)
     }
   }
 }

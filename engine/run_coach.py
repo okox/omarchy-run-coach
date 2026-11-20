@@ -1303,15 +1303,45 @@ THEME_KEYS = {"--bg": "background", "--fg": "foreground", "--card": "lighter_bac
               "--orange": "orange", "--cyan": "cyan", "--magenta": "magenta"}
 
 
+HEX = re.compile(r"^#[0-9a-fA-F]{6}$")
+
+
+def _blend(top, bottom, a):
+    t = [int(top[i:i + 2], 16) for i in (1, 3, 5)]
+    b = [int(bottom[i:i + 2], 16) for i in (1, 3, 5)]
+    return "#" + "".join(f"{round(x * a + y * (1 - a)):02x}" for x, y in zip(t, b))
+
+
 def theme_css():
-    """Colours from the Omarchy theme, if there is one. Only #rrggbb values
-    are taken, so the file can't inject anything into the page."""
-    f = HOME / ".local/state/omarchy/current/theme/colors.toml"
+    """The page follows the desktop: the Omarchy theme's palette, then the
+    shell's own popup and menu colours on top (the same ones the bar panel
+    uses). Only #rrggbb values are taken, so nothing can be injected."""
+    out = {}
     try:
-        found = dict(re.findall(r'^\s*([a-z_]+)\s*=\s*"(#[0-9a-fA-F]{6})"', f.read_text(), re.M))
+        txt = (HOME / ".local/state/omarchy/current/theme/colors.toml").read_text()
+        found = dict(re.findall(r'^\s*([a-z_]+)\s*=\s*"(#[0-9a-fA-F]{6})"', txt, re.M))
+        out.update({var: found[key] for var, key in THEME_KEYS.items() if key in found})
     except OSError:
-        return ""
-    return " ".join(f"{var}: {found[key]};" for var, key in THEME_KEYS.items() if key in found)
+        pass
+    try:
+        import tomllib
+        sh = tomllib.loads((HOME / ".config/omarchy/shell.toml").read_text())
+    except (OSError, ValueError, ImportError):
+        sh = {}
+    pop, menu = sh.get("popups") or {}, sh.get("menu") or {}
+    bg = pop.get("background") if HEX.match(str(pop.get("background", ""))) else out.get("--bg", "#1a1b26")
+    out["--bg"] = bg
+    if HEX.match(str(pop.get("text", ""))):
+        out["--fg"] = pop["text"]
+    sel = menu.get("selected-background")
+    if HEX.match(str(sel or "")):
+        a = float(menu.get("selected-background-alpha", 0.22))
+        out["--sel"] = sel
+        out["--card"] = _blend(sel, bg, max(0.05, a * 0.32))
+        out["--line"] = _blend(sel, bg, min(0.45, max(0.12, a * 1.3)))
+    if HEX.match(str(menu.get("selected-text", ""))):
+        out["--accent"] = out["--title"] = menu["selected-text"]
+    return " ".join(f"{k}: {v};" for k, v in out.items())
 
 
 def write_dashboard(st):
