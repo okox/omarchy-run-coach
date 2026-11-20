@@ -1,0 +1,14 @@
+Metadata-Version: 2.4
+Name: run-coach
+Version: 1.1.0
+Summary: Your running plan, checked against every run: Garmin/Strava import, HR zones, fitness trends, a web dashboard and bar output for Omarchy/Waybar.
+License: MIT
+Project-URL: Homepage, https://github.com/okox/omarchy-run-coach
+Requires-Python: >=3.10
+Description-Content-Type: text/plain
+Requires-Dist: garmin-fit-sdk>=21.0
+Requires-Dist: garminconnect>=0.3
+Requires-Dist: requests>=2.31
+Requires-Dist: curl-cffi>=0.7
+
+See https://github.com/okox/omarchy-run-coach

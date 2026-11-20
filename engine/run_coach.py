@@ -12,6 +12,8 @@ Subcommands:
   detail               print the current session and the last run as text
   mark done|skip|move|clear [SESSION_ID] [--km N]
   init-plan --race-date D  create ~/.config/run-coach/plan.json from the example
+  dashboard [--open|--serve]  the full panel as a web page (any desktop, or your phone)
+  install-timer        systemd user timer that refreshes every 15 min (non-Omarchy installs)
   km DATE DELTA        add DELTA km to DATE (late watch start, treadmill...)
   garmin-auth          log in to Garmin Connect (one-time) to download FIT files
   garmin-disconnect    forget the Garmin Connect token
@@ -63,6 +65,13 @@ DEFAULTS = {
     # The bar text budget.
     "max_text": 45,
 }
+
+
+def asset(name):
+    for base in (Path(__file__).resolve().parent, Path(sys.prefix) / "share/run-coach"):
+        if (base / name).exists():
+            return base / name
+    return None
 
 
 def system_tz():
@@ -1288,6 +1297,101 @@ def plan_html():
     return str(p) if p.exists() else None
 
 
+DASHBOARD = STATUS_DIR / "dashboard.html"
+THEME_KEYS = {"--bg": "background", "--fg": "foreground", "--card": "lighter_background", "--dim": "dark_foreground",
+              "--line": "selection", "--accent": "accent", "--green": "green", "--yellow": "yellow", "--red": "red",
+              "--orange": "orange", "--cyan": "cyan", "--magenta": "magenta"}
+
+
+def theme_css():
+    """Colours from the Omarchy theme, if there is one. Only #rrggbb values
+    are taken, so the file can't inject anything into the page."""
+    f = HOME / ".local/state/omarchy/current/theme/colors.toml"
+    try:
+        found = dict(re.findall(r'^\s*([a-z_]+)\s*=\s*"(#[0-9a-fA-F]{6})"', f.read_text(), re.M))
+    except OSError:
+        return ""
+    return " ".join(f"{var}: {found[key]};" for var, key in THEME_KEYS.items() if key in found)
+
+
+def write_dashboard(st):
+    tpl = asset("dashboard.html")
+    if not tpl:
+        return None
+    data = json.dumps(st, ensure_ascii=False, default=str)
+    # Run names and descriptions come from outside: keep them from closing the <script>.
+    data = data.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    html = tpl.read_text().replace("/*THEME*/", theme_css()).replace("/*STATUS*/null", data)
+    STATUS_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = DASHBOARD.with_suffix(".tmp")
+    tmp.write_text(html)
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, DASHBOARD)
+    return DASHBOARD
+
+
+def cmd_dashboard(args):
+    st = rebuild()
+    path = write_dashboard(st)
+    if not path:
+        sys.exit("dashboard.html template not found")
+    if not args.serve:
+        print(path)
+        if args.open:
+            webbrowser.open(path.as_uri())
+        return
+    host = "0.0.0.0" if args.lan else "127.0.0.1"
+    files = {"/": (DASHBOARD, "text/html; charset=utf-8"), "/status.json": (STATUS, "application/json")}
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            f = files.get(self.path.split("?")[0])
+            if not f or not f[0].exists():
+                self.send_error(404)
+                return
+            body = f[0].read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", f[1])
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer((host, args.port), H)
+    url = f"http://{'localhost' if host == '127.0.0.1' else host}:{args.port}/"
+    print(f"Run Coach dashboard on {url}  (Ctrl+C to stop)")
+    if args.lan:
+        print("Shared on your local network with no password: anyone on it can see your training data.")
+    if args.open:
+        webbrowser.open(f"http://localhost:{args.port}/")
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+
+def cmd_install_timer(_):
+    """For installs without setup.sh (pip/pipx): refresh every 15 minutes."""
+    import shutil
+    exe = shutil.which("run-coach") or os.path.abspath(sys.argv[0])
+    units = HOME / ".config/systemd/user"
+    units.mkdir(parents=True, exist_ok=True)
+    (units / "run-coach-scan.service").write_text(
+        "[Unit]\nDescription=Run Coach: import new runs and refresh\n\n[Service]\nType=oneshot\n"
+        f"ExecStart={exe} scan\nNice=10\n")
+    (units / "run-coach-scan.timer").write_text(
+        "[Unit]\nDescription=Run Coach: refresh every 15 minutes\n\n[Timer]\nOnBootSec=1min\n"
+        "OnUnitActiveSec=15min\nOnCalendar=*-*-* 00:01:00\nPersistent=true\nUnit=run-coach-scan.service\n\n"
+        "[Install]\nWantedBy=timers.target\n")
+    import subprocess
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=False)
+    subprocess.run(["systemctl", "--user", "enable", "--now", "run-coach-scan.timer"], check=False)
+    print(f"Timer installed: runs `{exe} scan` every 15 minutes.")
+
+
 def setup_error(reason):
     return {"version": 1, "generated": now().isoformat(timespec="seconds"),
             "bar": {"text": "run-coach: check setup", "class": "setup", "glyph": GLYPH["setup"], "tooltip": reason},
@@ -1321,6 +1425,10 @@ def rebuild(do_scan=False, force=False):
     except Exception as e:
         st = setup_error(f"{type(e).__name__}: {e}")
     save_json(STATUS, st)
+    try:
+        write_dashboard(st)
+    except OSError:
+        pass
     return st
 
 
@@ -1370,7 +1478,9 @@ def cmd_km(args):
 def cmd_init_plan(args):
     """Start from a plan file (the bundled example by default), moved so its
     race lands on --race-date."""
-    src = Path(args.source) if args.source else APP / "example-plan.json"
+    src = Path(args.source) if args.source else asset("example-plan.json")
+    if not src:
+        sys.exit("bundled example plan not found; pass --source FILE")
     if PLAN.exists() and not args.force:
         sys.exit(f"{PLAN} already exists (use --force to replace it)")
     raw = load_json(src, None)
@@ -1567,6 +1677,12 @@ def main():
     ip.add_argument("--target", help="goal time H:MM:SS")
     ip.add_argument("--source", help="plan file to start from (default: the bundled example)")
     ip.add_argument("--force", action="store_true")
+    db = sub.add_parser("dashboard", help="the full panel as a web page")
+    db.add_argument("--open", action="store_true", help="open it in the browser")
+    db.add_argument("--serve", action="store_true", help="serve it (live) instead of writing a file")
+    db.add_argument("--port", type=int, default=8724)
+    db.add_argument("--lan", action="store_true", help="with --serve: reachable from your local network (no password!)")
+    sub.add_parser("install-timer", help="systemd user timer, for installs without setup.sh")
     sub.add_parser("garmin-auth")
     sub.add_parser("garmin-disconnect")
     sub.add_parser("strava-auth")
@@ -1587,6 +1703,10 @@ def main():
         cmd_mark(args)
     elif args.cmd == "km":
         cmd_km(args)
+    elif args.cmd == "dashboard":
+        cmd_dashboard(args)
+    elif args.cmd == "install-timer":
+        cmd_install_timer(args)
     elif args.cmd == "init-plan":
         cmd_init_plan(args)
     elif args.cmd == "garmin-auth":

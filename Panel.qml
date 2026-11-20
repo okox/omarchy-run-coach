@@ -1342,6 +1342,10 @@ Panel {
                 onClicked: root.refresh()
               }
               Button {
+                text: "Dashboard"; iconText: "󰕮"; bordered: true; fontSize: Style.font.body
+                onClicked: { root.runCoach(["dashboard", "--open"]); root.close() }
+              }
+              Button {
                 text: "Full plan"; iconText: "󰈈"; bordered: true; fontSize: Style.font.body
                 enabled: !!(root.st && root.st.plan_html)
                 onClicked: { root.openPlan(); root.close() }

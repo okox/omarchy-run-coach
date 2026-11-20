@@ -35,7 +35,7 @@ else
   [[ -x $APP/venv/bin/python ]] || python3 -m venv "$APP/venv"
   "$APP/venv/bin/pip" install -q "${DEPS[@]}"
 fi
-cp "$PLUGIN/examples/plan.json" "$APP/example-plan.json"
+rm -f "$APP/example-plan.json"  # now read from the plugin folder
 # The command runs the engine straight from the plugin folder, so
 # `omarchy plugin update okox.run-coach` updates it too.
 cat >"$HOME/.local/bin/run-coach" <<WRAP

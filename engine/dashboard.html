@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Run Coach</title>
+<style>
+/* Colours come from your desktop theme when one is found (Omarchy), else these. */
+:root {
+  --bg: #1a1b26; --card: #1f2130; --fg: #c0caf5; --dim: #7a82a8; --line: #2b2f45;
+  --accent: #7aa2f7; --green: #9ece6a; --yellow: #e0af68; --red: #f7768e;
+  --orange: #eb927b; --cyan: #449dab; --magenta: #ad8ee6;
+  /*THEME*/
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); }
+body { font: 14px/1.45 ui-monospace, "JetBrainsMono Nerd Font", "JetBrains Mono", Menlo, Consolas, monospace; padding: 20px; }
+a { color: var(--accent); }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin: 0 auto 18px; max-width: 1500px; }
+header h1 { font-size: 20px; margin: 0; }
+header .bar { color: var(--dim); }
+header .right { margin-left: auto; color: var(--dim); font-size: 12px; }
+.problem { color: var(--yellow); max-width: 1500px; margin: 0 auto 12px; }
+main { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; max-width: 1500px; margin: 0 auto; align-items: start; }
+.col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+section > h2 { display: flex; align-items: baseline; gap: 8px; font-size: 16px; margin: 0; cursor: pointer; user-select: none; }
+section > h2 .chev { color: var(--dim); width: 1em; display: inline-block; transition: transform .15s; }
+section.folded > h2 .chev { transform: rotate(-90deg); }
+section > h2 .sub { margin-left: auto; font-size: 12px; font-weight: normal; color: var(--dim); text-align: right; }
+section > .body { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+section.folded > .body { display: none; }
+.dim { color: var(--dim); } .small { font-size: 12px; }
+.ok { color: var(--green); } .warn { color: var(--yellow); } .bad { color: var(--red); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; }
+.stats .l { font-size: 11px; color: var(--dim); } .stats .v { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.steps { margin: 0; padding-left: 18px; } .steps li { margin: 1px 0; }
+.days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.day { text-align: center; padding: 6px 2px; border-radius: 8px; cursor: default; font-size: 12px; }
+.day.click { cursor: pointer; } .day.click:hover { background: rgba(127,127,127,.08); } .day.sel { background: rgba(127,127,127,.14); }
+.day .d { color: var(--dim); } .day.today .d { color: var(--fg); font-weight: bold; }
+.day .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 8px; height: 8px; border-radius: 50%; margin: 5px auto; }
+.progress { height: 5px; border-radius: 3px; background: rgba(127,127,127,.15); overflow: hidden; }
+.progress > div { height: 100%; background: var(--accent); border-radius: 3px; }
+.nav { cursor: pointer; color: var(--dim); padding: 0 4px; } .nav:hover { color: var(--fg); } .nav.off { opacity: .25; cursor: default; }
+.zbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; }
+.zlegend { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 3px 12px; font-size: 12px; }
+.sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+.note { display: flex; gap: 8px; } .note .i { color: var(--accent); }
+.big { font-size: 34px; font-weight: bold; color: var(--accent); }
+svg { display: block; width: 100%; overflow: visible; }
+svg text { fill: var(--dim); font: 11px ui-monospace, monospace; }
+.chart-title { font-weight: bold; }
+#tip { position: fixed; pointer-events: none; z-index: 10; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font-size: 12px; white-space: pre; display: none; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+footer { max-width: 1500px; margin: 18px auto 0; color: var(--dim); font-size: 12px; }
+@media (max-width: 520px) { body { padding: 10px; } .stats { grid-template-columns: repeat(2, minmax(0,1fr)); } main { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header id="head"></header>
+<div class="problem" id="problems"></div>
+<main>
+  <div class="col" id="colPlan"></div>
+  <div class="col" id="colRun"></div>
+  <div class="col" id="colFit"></div>
+</main>
+<footer id="foot"></footer>
+<div id="tip"></div>
+<script>
+let ST = /*STATUS*/null;
+const $ = (s, r = document) => r.querySelector(s);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const h = (tag, attrs = {}, html = "") => { const e = document.createElement(tag); for (const k in attrs) e.setAttribute(k, attrs[k]); e.innerHTML = html; return e; };
+let weekIdx = -1, selDate = "";
+const store = { get(k, d) { try { const v = localStorage.getItem("rc." + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem("rc." + k, JSON.stringify(v)); } catch (e) {} } };
+
+// ---- tooltip -----------------------------------------------------------
+const tip = $("#tip");
+function showTip(ev, text) {
+  if (!text) return hideTip();
+  tip.textContent = text; tip.style.display = "block";
+  const x = Math.min(ev.clientX + 14, innerWidth - tip.offsetWidth - 8), y = ev.clientY - tip.offsetHeight - 12;
+  tip.style.left = x + "px"; tip.style.top = (y < 4 ? ev.clientY + 18 : y) + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+function tipOn(el, fn) {
+  el.addEventListener("mousemove", ev => showTip(ev, typeof fn === "function" ? fn(ev) : fn));
+  el.addEventListener("mouseleave", hideTip);
+}
+
+// ---- helpers -----------------------------------------------------------
+const stateColor = c => ({ done: css("--green"), warn: css("--yellow"), missed: css("--red"), race: css("--accent"), extra: css("--accent"),
+                           rest: css("--dim"), skipped: css("--dim"), none: css("--dim"), unconfirmed: css("--dim") }[c] || css("--fg"));
+const statusLabel = s => ({ planned: "Planned", done: "Done", warn: "Check", missed: "Missed", rest: "Rest", skipped: "Skipped",
+                            unconfirmed: "No data yet", race: "Race", extra: "Extra run", none: "Nothing planned" }[s] || s);
+const meaning = d => ({ done: "Done, on plan", warn: "Done, but off plan", missed: "Missed", unconfirmed: "No data yet (watch not synced)",
+                        skipped: "Skipped", planned: d.future ? "Planned" : "Planned for today", extra: "Extra run (not in the plan)",
+                        rest: "Rest day" }[d.status] || "Nothing planned");
+const zoneColor = k => ({ recovery: css("--cyan"), easy: css("--green"), steady: css("--yellow"), threshold: css("--orange"),
+                          tempo_vo2: css("--red"), interval: css("--magenta") }[k] || css("--dim"));
+const stageColor = k => ({ warmup: css("--cyan"), active: css("--green"), interval: css("--orange"), cooldown: css("--accent") }[k] || css("--dim"));
+function hms(s) { if (s == null) return "-"; s = Math.round(s); const H = Math.floor(s / 3600), M = Math.floor(s % 3600 / 60), S = s % 60;
+  return (H ? H + ":" + String(M).padStart(2, "0") : M) + ":" + String(S).padStart(2, "0"); }
+const paceTxt = s => s ? Math.floor(s / 60) + ":" + String(Math.round(s % 60)).padStart(2, "0") : "-";
+function shortDate(iso) { if (!iso) return ""; const d = new Date(iso.length <= 10 ? iso + "T12:00:00" : iso);
+  return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }); }
+function ago(iso) { if (!iso) return ""; const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  return m < 1 ? "just now" : m < 60 ? m + " min ago" : m < 2880 ? Math.round(m / 60) + " h ago" : Math.round(m / 1440) + " days ago"; }
+function stats(rows) { // [label, value, tooltip]
+  const g = h("div", { class: "stats" });
+  rows.forEach(([l, v, t]) => { const c = h("div", {}, `<div class="l">${esc(l)}</div><div class="v">${esc(v)}</div>`); if (t) tipOn(c, t); g.append(c); });
+  return g;
+}
+function section(key, title, sub, subTip) {
+  const s = h("section"); if (store.get("fold." + key, false)) s.classList.add("folded");
+  const hd = h("h2", {}, `<span class="chev">▾</span><span class="ttl">${title}</span><span class="sub">${esc(sub || "")}</span>`);
+  hd.addEventListener("click", ev => { if (ev.target.closest(".nav")) return; s.classList.toggle("folded"); store.set("fold." + key, s.classList.contains("folded")); });
+  if (subTip) tipOn($(".sub", hd), subTip);
+  const body = h("div", { class: "body" }); s.append(hd, body); return [s, body, hd];
+}
+const SVGNS = "http://www.w3.org/2000/svg";
+function svg(w, hgt) { const s = document.createElementNS(SVGNS, "svg"); s.setAttribute("viewBox", `0 0 ${w} ${hgt}`); s.setAttribute("preserveAspectRatio", "none"); s.style.height = hgt + "px"; return s; }
+function sv(tag, attrs, parent) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.append(e); return e; }
+function path(pts) { let d = "", pen = false; for (const p of pts) { if (p == null) { pen = false; continue; } d += (pen ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1); pen = true; } return d; }
+// Charts are drawn at the container's pixel width so text and lines stay crisp.
+function chartBox(parent, height, draw) {
+  const box = h("div"); parent.append(box);
+  const paint = () => { box.innerHTML = ""; const w = Math.max(200, box.clientWidth); draw(box, w, height); };
+  requestAnimationFrame(paint); new ResizeObserver(() => paint()).observe(box);
+  return box;
+}
+
+// ---- Plan column ---------------------------------------------------------
+function renderPlan() {
+  const col = $("#colPlan"); col.innerHTML = "";
+  const cur = ST.current;
+  if (cur) {
+    const [s, b] = section("session", ST.current_is_today ? "Today" : "Next session", statusLabel(cur.status) + (cur.moved ? " · moved" : ""));
+    b.append(h("div", {}, `<div style="font-size:16px;font-weight:bold">${esc((ST.current_is_today ? "Today" : cur.dow + " " + cur.date.slice(8)) + " · " + cur.title)}</div>
+      <div class="dim small">${esc([cur.id, "Week " + cur.week + " " + cur.phase, cur.garmin ? "Watch: " + cur.garmin : ""].filter(Boolean).join("  ·  "))}</div>`));
+    if (ST.today_rest) b.append(h("div", { class: "dim" }, esc(ST.rest_note || "Rest day")));
+    b.append(h("ul", { class: "steps" }, cur.steps.map(x => `<li>${esc(x)}</li>`).join("")));
+    if (cur.result) b.append(h("div", { style: `color:${stateColor(cur.result.status)}` }, esc(cur.result.verdict)));
+    b.append(h("div", { class: "dim small" }, "Mark it from the bar panel or with <code>run-coach mark done|skip|move</code>"));
+    col.append(s);
+  }
+  // Week
+  const weeks = ST.weeks || (ST.week ? [ST.week] : []);
+  if (weeks.length) {
+    const i = weekIdx < 0 || weekIdx >= weeks.length ? weeks.length - 1 : weekIdx, w = weeks[i];
+    const [s, b, hd] = section("week", "", `${w.km.toFixed(1)}/${w.target} km · ${w.done}/${w.planned} sessions`);
+    $(".ttl", hd).innerHTML = `<span class="nav ${i > 0 ? "" : "off"}" id="wPrev">‹</span> Week ${w.number}${w.phase ? " · " + esc(w.phase) : ""} <span class="nav ${i < weeks.length - 1 ? "" : "off"}" id="wNext">›</span>`;
+    $("#wPrev", hd).onclick = () => { if (i > 0) { weekIdx = i - 1; selDate = ""; renderAll(); } };
+    $("#wNext", hd).onclick = () => { if (i < weeks.length - 1) { weekIdx = i + 1; selDate = ""; renderAll(); } };
+    b.append(h("div", { class: "progress" }, `<div style="width:${(w.pct * 100).toFixed(1)}%"></div>`));
+    const days = h("div", { class: "days" });
+    w.days.forEach(d => {
+      const clickable = !!(d.run || (d.steps && d.steps.length));
+      const c = h("div", { class: "day" + (d.today ? " today" : "") + (clickable ? " click" : "") + (selDate === d.date ? " sel" : "") },
+        `<div class="d">${d.dow} ${d.day}</div><div class="dot" style="${d.status === "planned" ? "border:1px solid var(--dim)" : "background:" + stateColor(d.status)};${d.status === "none" ? "opacity:.35" : ""}"></div>
+         <div class="t ${d.type === "rest" || d.type === "none" ? "dim" : ""}">${esc(d.type === "rest" ? "Rest" : d.title)}</div><div class="dim">${d.km > 0 ? d.km.toFixed(1) + " km" : "&nbsp;"}</div>`);
+      tipOn(c, () => { const r = d.run, L = [shortDate(d.date) + (d.title && d.type !== "rest" ? "  ·  " + d.title : ""), meaning(d)];
+        if (r) { L.push(`${r.distance_km.toFixed(2)} km  ·  ${r.duration}  ·  ${r.pace}/km${r.avg_hr ? "  ·  HR " + r.avg_hr : ""}`); if (r.verdict) L.push(r.verdict); }
+        if (clickable) L.push(r ? "Click for details" : "Click to see the workout"); return L.join("\n"); });
+      if (clickable) c.onclick = () => { selDate = selDate === d.date ? "" : d.date; renderAll(); };
+      days.append(c);
+    });
+    b.append(days);
+    // weekly volume over the whole plan
+    const vol = ST.volume || [];
+    if (vol.length) {
+      b.append(h("div", { class: "dim small" }, "Weekly km · plan to race day"));
+      chartBox(b, 110, (box, W, H) => {
+        const s2 = svg(W, H); box.append(s2);
+        const max = Math.max(1, ...vol.map(v => Math.max(v.target, v.km || 0))), slot = W / vol.length, gap = 2;
+        vol.forEach((v, k) => {
+          const x = k * slot + gap / 2, bw = slot - gap, th = (H - 4) * v.target / max, past = v.km != null, shown = v.week === w.number;
+          sv("rect", { x, y: H - th, width: bw, height: th, rx: Math.min(4, bw / 2), fill: "none", stroke: css("--fg"), "stroke-opacity": shown ? .55 : .22 }, s2);
+          if (past && v.km > 0) { const ah = (H - 4) * v.km / max; sv("rect", { x, y: H - ah, width: bw, height: ah, rx: Math.min(4, bw / 2), fill: css("--accent"), "fill-opacity": shown ? 1 : .6 }, s2); }
+          const hit = sv("rect", { x: k * slot, y: 0, width: slot, height: H, fill: "transparent", style: past ? "cursor:pointer" : "" }, s2);
+          tipOn(hit, `Week ${v.week}${v.phase ? " · " + v.phase : ""}  (${shortDate(v.monday)})\n${past ? v.km.toFixed(1) + " of " + v.target + " km planned" : v.target + " km planned"}`);
+          if (past) hit.addEventListener("click", () => { const j = weeks.findIndex(x => x.number === v.week); if (j >= 0) { weekIdx = j; selDate = ""; renderAll(); } });
+        });
+      });
+    }
+    col.append(s);
+  }
+  // Race
+  if (ST.race) {
+    const r = ST.race, cp = ST.next_checkpoint;
+    const [s, b] = section("race", "Race");
+    b.append(h("div", {}, `<span class="big">${r.days}</span> <span class="dim">days to ${esc(r.short || r.name)}</span>
+      <div>${esc(shortDate(r.date))}  ·  ${esc(r.target)}${r.pace ? " (" + esc(r.pace) + ")" : ""}</div>`));
+    if (cp) b.append(h("div", {}, `<div class="dim small">Next checkpoint ${cp.days === 0 ? "today" : "in " + cp.days + " d"} (${esc(shortDate(cp.date))})</div><div>${esc(cp.test)}</div><div class="dim">${esc(cp.target)}</div>`));
+    col.append(s);
+  }
+}
+
+// ---- Run column ------------------------------------------------------------
+function renderRun() {
+  const col = $("#colRun"); col.innerHTML = "";
+  const weeks = ST.weeks || [];
+  const all = weeks.flatMap(w => w.days); const sel = selDate ? all.find(d => d.date === selDate) : null;
+  const r = sel ? sel.run : ST.last_run;
+  if (!r && !sel) return;
+  const title = sel ? shortDate(sel.date) : "Last run";
+  const sub = r ? (sel ? "" : shortDate(r.date) + " ") + r.time + "  ·  " + r.session : [sel.id, sel.title, meaning(sel)].filter(Boolean).join("  ·  ");
+  const [s, b, hd] = section("run", esc(title), sub);
+  if (sel) { const x = h("span", { class: "nav", title: "Back to the last run" }, "✕"); x.onclick = () => { selDate = ""; renderAll(); }; hd.append(x); }
+  if (!r) {
+    if (sel.garmin) b.append(h("div", { class: "dim" }, "Watch: " + esc(sel.garmin)));
+    b.append(h("ul", { class: "steps" }, sel.steps.map(x => `<li>${esc(x)}</li>`).join("")));
+    col.append(s); return;
+  }
+  b.append(stats([["Distance", r.distance_km.toFixed(2) + " km"], ["Time", r.duration], ["Pace", r.pace + " /km"],
+    ["Avg HR", (r.avg_hr || "-") + (r.max_hr ? "  (max " + r.max_hr + ")" : "")],
+    ["Above cap", r.pct_above_cap != null ? r.pct_above_cap + "% > " + r.cap : "-"], ["Vertical ratio", r.vr ? r.vr + "%" : "-"],
+    ["Cadence", r.cadence ? r.cadence + " spm" : "-"], ["Ground contact", r.gct ? r.gct + " ms" : "-"]]));
+  b.append(h("div", { style: `color:${stateColor(r.status)}` }, esc(r.verdict + (r.hr_after_10 != null ? "  ·  HR after 10 min " + r.hr_after_10 : ""))
+    + (r.notes && r.notes.length ? "<br>" + r.notes.map(esc).join("<br>") : "")));
+  if (r.note) b.append(h("div", { class: "note" }, `<span class="i">💬</span><span>${esc(r.note)}</span>`));
+  if (r.strava) { const v = r.strava; b.append(h("div", { class: "dim small" }, esc(["Strava: " + v.name, v.description, v.relative_effort ? "Relative Effort " + Math.round(v.relative_effort) : "",
+    v.kudos ? v.kudos + " kudos" : "", v.gear || ""].filter(Boolean).join("  ·  ")))); }
+  if (r.reps && r.reps.length) b.append(h("div", { class: "small" }, r.reps.map((x, k) =>
+    `<div class="${x.ok ? "" : "warn"}">${x.ok ? "✓" : "✗"} ${k + 1}. ${esc(x.name)}   ${esc(x.pace)}/km  HR ${x.hr || "-"}   <span class="dim">target ${esc(x.target)}</span></div>`).join("")));
+  if (r.zones) {
+    b.append(h("div", { class: "chart-title" }, "Time in HR zones"));
+    const bar = h("div", { class: "zbar" }), tot = r.zones.reduce((a, z) => a + z.secs, 0) || 1;
+    r.zones.forEach(z => { if (!z.secs) return; const seg = h("div", { style: `flex:${z.secs / tot};background:${zoneColor(z.key)}` }); tipOn(seg, `${z.name} (${z.label} bpm): ${z.time}, ${z.pct}%`); bar.append(seg); });
+    b.append(bar, h("div", { class: "zlegend" }, r.zones.map(z =>
+      `<div class="${z.secs ? "" : "dim"}"><span class="sw" style="background:${zoneColor(z.key)}"></span>${esc(z.name)} ${esc(z.label)} <span class="dim">${z.time} · ${z.pct}%</span></div>`).join("")));
+  }
+  if (r.chart) runChart(b, r.chart);
+  b.append(h("div", { class: "dim small" }, "From " + esc(r.source) + (r.runs > 1 ? " · " + r.runs + " runs combined" : "")));
+  col.append(s);
+}
+
+// Pace (top) and HR (bottom) on one distance axis; stages tint the background.
+function runChart(parent, ch) {
+  parent.append(h("div", { class: "chart-title" }, "Pace & heart rate"));
+  chartBox(parent, 190, (box, W, H) => {
+    const pts = ch.points, total = pts.length ? pts[pts.length - 1][0] : 1, lw = 48, pw = W - lw, ph = 72, gap = 12, top = 4;
+    const pc = v => [...v].sort((a, c) => a - c);
+    const pv = pc(pts.map(p => p[1]).filter(Boolean)), hv = pc(pts.map(p => p[2]).filter(Boolean));
+    const plo = pv.length ? pv[Math.floor(pv.length * .02)] - 10 : 240, phi = pv.length ? pv[Math.floor(pv.length * .98)] + 10 : 420;
+    const hlo = hv.length ? hv[Math.floor(hv.length * .02)] - 4 : 100, hhi = hv.length ? hv[hv.length - 1] + 3 : 190;
+    const X = km => pw * km / total, YP = v => top + (Math.min(phi, Math.max(plo, v)) - plo) / (phi - plo) * ph, YH = v => top + ph + gap + ph - (v - hlo) / (hhi - hlo) * ph;
+    const s = svg(W, H); box.append(s);
+    ch.stages.forEach(st => {
+      sv("rect", { x: X(st.from), y: top, width: Math.max(1, X(st.to) - X(st.from)), height: ph * 2 + gap, fill: stageColor(st.kind), "fill-opacity": st.kind === "recovery" || st.kind === "rest" ? .07 : .2 }, s);
+      if (X(st.to) - X(st.from) > st.name.length * 7 + 8) { const t = sv("text", { x: X(st.from) + 4, y: top + 12 }, s); t.textContent = st.name; }
+    });
+    sv("path", { d: path(pts.map(p => p[1] ? [X(p[0]), YP(p[1])] : null)), fill: "none", stroke: css("--fg"), "stroke-width": 2, "stroke-linejoin": "round" }, s);
+    sv("path", { d: path(pts.map(p => p[2] ? [X(p[0]), YH(p[2])] : null)), fill: "none", stroke: css("--red"), "stroke-width": 2, "stroke-linejoin": "round" }, s);
+    const lab = (y, txt, col) => { const t = sv("text", { x: pw + 6, y }, s); t.textContent = txt; if (col) t.style.fill = col; };
+    lab(top + 10, paceTxt(plo)); lab(top + 22, "/km", css("--fg")); lab(top + ph, paceTxt(phi));
+    lab(top + ph + gap + 10, Math.round(hhi)); lab(top + ph + gap + 22, "bpm", css("--red")); lab(top + ph * 2 + gap, Math.round(hlo));
+    const ax = (x, txt, anchor) => { const t = sv("text", { x, y: H - 2, "text-anchor": anchor }, s); t.textContent = txt; };
+    ax(0, "0 km", "start"); ax(pw, total.toFixed(1) + " km", "end");
+    const cross = sv("line", { y1: top, y2: top + ph * 2 + gap, stroke: css("--fg"), "stroke-opacity": .6, visibility: "hidden" }, s);
+    const hit = sv("rect", { x: 0, y: top, width: pw, height: ph * 2 + gap, fill: "transparent" }, s);
+    tipOn(hit, ev => {
+      const km = (ev.clientX - s.getBoundingClientRect().left) / pw * total;
+      let p = pts[0]; for (const q of pts) if (Math.abs(q[0] - km) < Math.abs(p[0] - km)) p = q;
+      cross.setAttribute("x1", X(p[0])); cross.setAttribute("x2", X(p[0])); cross.setAttribute("visibility", "visible");
+      const st = ch.stages.find(x => p[0] >= x.from && p[0] <= x.to);
+      return `km ${p[0].toFixed(2)}${st ? "  ·  " + st.name + " (" + st.lap + ")" : ""}\nPace ${p[1] ? paceTxt(p[1]) + "/km" : "-"}  ·  HR ${p[2] || "-"}`
+        + (st && st.pace ? `\nStage avg ${st.pace}/km${st.hr ? " · HR " + st.hr : ""}` : "");
+    });
+    hit.addEventListener("mouseleave", () => cross.setAttribute("visibility", "hidden"));
+  });
+}
+
+// ---- Fitness column ----------------------------------------------------------
+function lineChart(parent, title, series, opts) {
+  // series: [{pts:[[x,y]], color, label}] with x in ms; one y scale for all.
+  parent.append(h("div", { class: "chart-title" }, esc(title)));
+  chartBox(parent, opts.height || 110, (box, W, H) => {
+    const lw = 64, pw = W - lw, ph = H - 18, s = svg(W, H); box.append(s);
+    const xs = series.flatMap(x => x.pts.map(p => p[0])).concat(opts.xMax ? [opts.xMax] : []);
+    const ys = series.flatMap(x => x.pts.map(p => p[1])).concat(opts.yRef != null ? [opts.yRef] : []);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), pad = opts.yPad || 0;
+    let y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad; if (opts.zero) y0 = 0;
+    const X = x => pw * (x - x0) / (x1 - x0 || 1), Y = y => opts.invert ? (y - y0) / (y1 - y0 || 1) * ph : ph - (y - y0) / (y1 - y0 || 1) * ph;
+    if (opts.yRef != null) { sv("line", { x1: 0, x2: pw, y1: Y(opts.yRef), y2: Y(opts.yRef), stroke: css("--green"), "stroke-dasharray": "4 4", "stroke-opacity": .8 }, s);
+      const t = sv("text", { x: pw + 6, y: Y(opts.yRef) + 4 }, s); t.textContent = opts.yRefLabel; }
+    if (opts.vMark != null) sv("line", { x1: X(opts.vMark), x2: X(opts.vMark), y1: 0, y2: ph, stroke: css("--fg"), "stroke-opacity": .18 }, s);
+    let lastY = [];
+    series.forEach(se => {
+      sv("path", { d: path(se.pts.map(p => [X(p[0]), Y(p[1])])), fill: "none", stroke: se.color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-opacity": se.alpha || 1 }, s);
+      const l = se.pts[se.pts.length - 1]; if (!l) return;
+      if (opts.endDot) sv("circle", { cx: X(l[0]), cy: Y(l[1]), r: 4, fill: se.color }, s);
+      let y = Y(l[1]) + 4; for (const o of lastY) if (Math.abs(o - y) < 12) y = o + 12; lastY.push(y);
+      const t = sv("text", { x: (opts.labelAtEnd ? X(l[0]) + 8 : pw + 6), y }, s); t.textContent = se.label(l); t.style.fill = se.color;
+    });
+    (opts.axis || []).forEach(([x, txt, anchor]) => { const t = sv("text", { x: X(x), y: H - 2, "text-anchor": anchor || "middle" }, s); t.textContent = txt; });
+    const cross = sv("line", { y1: 0, y2: ph, stroke: css("--fg"), "stroke-opacity": .6, visibility: "hidden" }, s);
+    const hit = sv("rect", { x: 0, y: 0, width: pw, height: ph, fill: "transparent" }, s);
+    tipOn(hit, ev => {
+      const px = ev.clientX - s.getBoundingClientRect().left, base = series[0].pts; if (!base.length) return "";
+      let k = 0; base.forEach((p, j) => { if (Math.abs(X(p[0]) - px) < Math.abs(X(base[k][0]) - px)) k = j; });
+      cross.setAttribute("x1", X(base[k][0])); cross.setAttribute("x2", X(base[k][0])); cross.setAttribute("visibility", "visible");
+      return opts.tip(k);
+    });
+    hit.addEventListener("mouseleave", () => cross.setAttribute("visibility", "hidden"));
+  });
+}
+const ms = iso => new Date(iso + "T12:00:00").getTime();
+
+function renderFit() {
+  const col = $("#colFit"); col.innerHTML = "";
+  const f = ST.fitness;
+  if (f) {
+    const [s, b] = section("fitness", "Garmin", f.fetched ? "fitness · updated " + ago(f.fetched) : "fitness");
+    const rows = [];
+    if (f.vo2max) rows.push(["VO2 max", String(f.vo2max), "Running VO2 max, updated " + shortDate(f.vo2max_date)]);
+    if (f.predictions) rows.push(["Marathon pred.", hms(f.predictions.marathon), `5K ${hms(f.predictions.k5)} · 10K ${hms(f.predictions.k10)} · Half ${hms(f.predictions.half)}\nGoal ${hms(f.goal_s)}: ${hms(Math.abs(f.predictions.marathon - f.goal_s))} ${f.predictions.marathon > f.goal_s ? "to go" : "ahead"}`]);
+    if (f.readiness) rows.push(["Readiness", f.readiness.score + " " + f.readiness.level, `Sleep score ${f.readiness.sleep} · recovery left ${f.readiness.recovery_h} h`]);
+    if (f.endurance) rows.push(["Endurance", f.endurance.score + " " + f.endurance.class, f.endurance.next ? (f.endurance.next - f.endurance.score) + " points to the next level" : ""]);
+    if (f.fitness_age) rows.push(["Fitness age", String(f.fitness_age), "Your age: " + f.age]);
+    if (f.rhr) rows.push(["Resting HR", f.rhr + " bpm"]);
+    if (f.hrv) rows.push(["HRV", f.hrv.night + " " + f.hrv.status, `Last night ${f.hrv.night} ms, 7-day average ${f.hrv.week} ms`]);
+    if (f.lt_hr) rows.push(["Threshold", f.lt_hr + (f.lt_pace ? " · " + f.lt_pace : ""), "Lactate threshold from the watch: HR and pace /km"]);
+    b.append(stats(rows));
+    if (f.balance) { const bl = f.balance, row = (n, v) => `${n}: ${v[0]}  (target ${v[1]}-${v[2]})`;
+      const e = h("div", { class: bl.phrase.includes("Balanced") ? "" : "warn" }, esc("Load: " + (f.status ? f.status + " · " : "") + bl.phrase));
+      tipOn(e, `Last 4 weeks of training load\n${row("Low aerobic (easy)", bl.low)}\n${row("High aerobic (tempo/threshold)", bl.high)}\n${row("Anaerobic", bl.anaerobic)}` + (f.acwr ? `\nAcute/chronic ratio ${f.acwr} (${f.acwr_status})` : ""));
+      b.append(e); }
+    if (f.trend && f.trend.length > 1) lineChart(b, "Predicted marathon", [{ pts: f.trend.map(t => [ms(t[0]), t[1]]), color: css("--accent"), label: l => hms(l[1]) }],
+      { invert: true, yPad: 300, yRef: f.goal_s, yRefLabel: "goal " + hms(Math.round(f.goal_s / 60) * 60).replace(/:00$/, ""), xMax: ms(f.race_date),
+        vMark: ms(f.plan_start), endDot: true, labelAtEnd: true, height: 120,
+        axis: [[ms(f.trend[0][0]), shortDate(f.trend[0][0]), "start"], [ms(f.plan_start), "plan start"], [ms(f.race_date), "race day", "end"]],
+        tip: k => `${shortDate(f.trend[k][0])}\nMarathon ${hms(f.trend[k][1])}  (${hms(Math.abs(f.trend[k][1] - f.goal_s))} ${f.trend[k][1] > f.goal_s ? "slower" : "faster"} than goal)` });
+    col.append(s);
+  }
+  const sd = ST.strava;
+  if (sd) {
+    const [s, b] = section("strava", "Strava", "fitness · from your Relative Effort",
+      "Strava doesn't share its Fitness score, race predictions or AI comments with other apps.\nThese use Strava's method on your Strava data: Fitness = 42-day and Fatigue = 7-day\nweighted averages of daily Relative Effort, Form = Fitness - Fatigue.\nRace predictions: Riegel formula from your best efforts in the last 6 weeks.");
+    const fz = sd.fitness;
+    if (fz) {
+      const wk = fz.series.slice(-7).reduce((a, r) => a + r[4], 0), form = fz.form;
+      b.append(stats([["Fitness", fz.fitness.toFixed(0) + (fz.fitness_7d ? `  (${fz.fitness_7d > 0 ? "+" : ""}${fz.fitness_7d.toFixed(0)} 7d)` : ""), "42-day weighted average of daily Relative Effort (all sports)"],
+        ["Fatigue", fz.fatigue.toFixed(0), "7-day weighted average of daily Relative Effort"],
+        ["Form", (form > 0 ? "+" : "") + form.toFixed(0) + " " + (form > 5 ? "Fresh" : form < -10 ? "Tired" : "Steady"), "Fitness minus fatigue. Positive is fresh, very negative is overreaching.\nAim to rise into race day."],
+        ["Effort, 7 days", String(Math.round(wk)), "Sum of Relative Effort over the last 7 days"]]));
+      const ser = fz.series;
+      lineChart(b, `Fitness & fatigue, last ${ser.length} days`, [
+        { pts: ser.map(r => [ms(r[0]), r[1]]), color: css("--accent"), label: () => "Fitness" },
+        { pts: ser.map(r => [ms(r[0]), r[2]]), color: css("--magenta"), alpha: .75, label: () => "Fatigue" }],
+        { zero: true, height: 110, axis: [[ms(ser[0][0]), shortDate(ser[0][0]), "start"], [ms(ser[ser.length - 1][0]), "today", "end"]],
+          tip: k => { const r = ser[k]; return `${shortDate(r[0])}  ·  ${r[4] ? "Relative Effort " + Math.round(r[4]) : "no activity"}\nFitness ${r[1].toFixed(0)}  ·  Fatigue ${r[2].toFixed(0)}  ·  Form ${r[3] > 0 ? "+" : ""}${r[3].toFixed(0)}`; } });
+    }
+    if (sd.predictions) {
+      b.append(h("div", { class: "chart-title" }, "Race predictions"));
+      b.append(stats(sd.predictions.map(p => [p.race, hms(p.secs), `From your best ${p.from}\n(training efforts, so on the slow side)`])));
+    }
+    if (sd.notes_error) b.append(h("div", { class: "warn small" }, "Coach notes: " + esc(sd.notes_error)));
+    col.append(s);
+  }
+}
+
+// ---- page ------------------------------------------------------------------
+function renderAll() {
+  if (!ST) { $("#head").innerHTML = "<h1>Run Coach</h1><span class='dim'>No data yet: run <code>run-coach scan</code></span>"; return; }
+  const bar = ST.bar || {};
+  $("#head").innerHTML = `<h1>Run Coach</h1><span class="bar" style="color:${bar.class === "planned" || bar.class === "setup" ? "var(--fg)" : stateColor(bar.class)}">${esc(bar.text)}</span>
+    <span class="right">updated ${esc(ago(ST.generated))}</span>`;
+  $("#problems").textContent = (ST.problems || []).join("  ·  ");
+  renderPlan(); renderRun(); renderFit();
+  const so = ST.sources;
+  if (so) $("#foot").textContent = [(so.garmin_last_activity ? "Garmin: latest run " + shortDate(so.garmin_last_activity) : "Garmin: no runs yet")
+      + (!so.garmin_connected ? " · Connect not linked" : so.garmin_error ? " · Connect: " + so.garmin_error : " · Connect synced " + ago(so.garmin_last_sync)),
+    !so.strava_connected ? "Strava: not connected" : so.strava_error ? "Strava: " + so.strava_error : "Strava: synced " + ago(so.strava_last_sync)].join("   ·   ");
+}
+renderAll();
+// Served by `run-coach dashboard --serve`: poll for fresh data. Opened as a
+// file: reload it now and then (the engine rewrites it on every refresh).
+if (location.protocol.startsWith("http")) {
+  setInterval(() => fetch("status.json", { cache: "no-store" }).then(r => r.json()).then(j => { if (j.generated !== ST?.generated) { ST = j; renderAll(); } }).catch(() => {}), 60000);
+} else {
+  setTimeout(() => location.reload(), 5 * 60000);
+}
+</script>
+</body>
+</html>

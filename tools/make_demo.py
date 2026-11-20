@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT / "engine"))
 import run_coach as rc  # noqa: E402
 
 # The example plan, moved so the race is ~16 weeks out from "today".
-plan = json.loads((ROOT / "examples/plan.json").read_text())
+plan = json.loads((ROOT / "engine/example-plan.json").read_text())
 first = min(dt.date.fromisoformat(s["date"]) for s in plan["sessions"])
 week0_mon = first - dt.timedelta(days=first.weekday())
 today = dt.date.today()

@@ -1,0 +1,4 @@
+garmin-fit-sdk>=21.0
+garminconnect>=0.3
+requests>=2.31
+curl-cffi>=0.7
