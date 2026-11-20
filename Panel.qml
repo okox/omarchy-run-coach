@@ -1026,16 +1026,48 @@ Panel {
                     visible: !!(root.det && (root.det.note || root.det.strava))
                     width: parent.width
                     spacing: Style.space(4)
-                    Row {
+                    // The coach's note: its own titled box, so it reads as the analysis it is.
+                    Rectangle {
                       visible: !!(root.det && root.det.note)
                       width: parent.width
-                      spacing: Style.space(8)
-                      PText { id: noteGlyph; font.pixelSize: Style.font.body; color: root.cAccent; text: "󰭹" }
-                      PText {
-                        width: parent.width - noteGlyph.width - Style.space(8)
-                        wrapMode: Text.Wrap
-                        font.pixelSize: Style.font.body
-                        text: root.det && root.det.note ? root.det.note : ""
+                      implicitHeight: noteCol.implicitHeight + Style.space(20)
+                      radius: Style.space(8)
+                      color: Qt.rgba(root.selTint.r, root.selTint.g, root.selTint.b, Math.max(0.08, root.selTint.a * 0.6))
+                      border.width: 1
+                      border.color: root.cardEdge
+                      Column {
+                        id: noteCol
+                        x: Style.space(12); y: Style.space(10)
+                        width: parent.width - Style.space(24)
+                        spacing: Style.space(4)
+                        Item {
+                          width: parent.width
+                          implicitHeight: noteHead.implicitHeight
+                          Row {
+                            id: noteHead
+                            spacing: Style.space(6)
+                            PText { font.pixelSize: Style.font.body; color: root.cTitle; text: "󰭹" }
+                            PText { font.pixelSize: Style.font.body; font.bold: true; color: root.cTitle; text: "Coach's note" }
+                          }
+                          PText {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            font.pixelSize: Style.font.bodySmall
+                            color: root.dim
+                            text: "by Claude"
+                            MouseArea { id: byMouse; anchors.fill: parent; hoverEnabled: true }
+                            PanelToolTip {
+                              visible: byMouse.containsMouse
+                              text: "Written by Claude Code from this run's Garmin data and the planned session.\nOne note per new run; turn off with \"coach_notes\": false in ~/.config/run-coach/config.json"
+                            }
+                          }
+                        }
+                        PText {
+                          width: parent.width
+                          wrapMode: Text.Wrap
+                          font.pixelSize: Style.font.body
+                          text: root.det && root.det.note ? root.det.note : ""
+                        }
                       }
                     }
                     PText {

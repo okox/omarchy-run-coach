@@ -187,6 +187,12 @@ Only Garmin data goes into the note: the run's numbers, its stages, the
 planned session and your zones. Strava data is never sent to an AI model,
 in line with Strava's API terms. Turn notes off with `"coach_notes": false`.
 
+The note appears in the run column as a **Coach's note · by Claude** box.
+No API key is needed: it uses whatever login your Claude Code has. On a
+Claude subscription it just counts toward your plan's usage; on a
+pay-as-you-go API key a note costs a fraction of a cent. Set a smaller
+model with `"note_model": "claude-haiku-5-5"` (or `claude-sonnet-5-5`).
+
 ## How runs are judged
 
 | Run | Rule |

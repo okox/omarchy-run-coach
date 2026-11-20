@@ -48,7 +48,8 @@ section.folded > .body { display: none; }
 .zbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; }
 .zlegend { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 3px 12px; font-size: 12px; }
 .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
-.note { display: flex; gap: 8px; } .note .i { color: var(--accent); }
+.note { background: color-mix(in srgb, var(--sel) 14%, transparent); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.note .nh { display: flex; justify-content: space-between; color: var(--title); font-weight: bold; } .note .by { color: var(--dim); font-weight: normal; font-size: 12px; }
 .big { font-size: 34px; font-weight: bold; color: var(--accent); }
 svg { display: block; width: 100%; overflow: visible; }
 svg text { fill: var(--dim); font: 11px ui-monospace, monospace; }
@@ -226,7 +227,8 @@ function renderRun() {
     ["Cadence", r.cadence ? r.cadence + " spm" : "-"], ["Ground contact", r.gct ? r.gct + " ms" : "-"]]));
   b.append(h("div", { style: `color:${stateColor(r.status)}` }, esc(r.verdict + (r.hr_after_10 != null ? "  ·  HR after 10 min " + r.hr_after_10 : ""))
     + (r.notes && r.notes.length ? "<br>" + r.notes.map(esc).join("<br>") : "")));
-  if (r.note) b.append(h("div", { class: "note" }, `<span class="i">💬</span><span>${esc(r.note)}</span>`));
+  if (r.note) { const n = h("div", { class: "note" }, `<div class="nh"><span>💬 Coach's note</span><span class="by">by Claude</span></div><div>${esc(r.note)}</div>`);
+    tipOn($(".by", n), "Written by Claude Code from this run's Garmin data and the planned session.\nOne note per new run; turn off with \"coach_notes\": false in config.json"); b.append(n); }
   if (r.strava) { const v = r.strava; b.append(h("div", { class: "dim small" }, esc(["Strava: " + v.name, v.description, v.relative_effort ? "Relative Effort " + Math.round(v.relative_effort) : "",
     v.kudos ? v.kudos + " kudos" : "", v.gear || ""].filter(Boolean).join("  ·  ")))); }
   if (r.reps && r.reps.length) b.append(h("div", { class: "small" }, r.reps.map((x, k) =>
