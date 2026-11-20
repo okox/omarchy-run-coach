@@ -7,3 +7,6 @@ state.json
 strava.json
 garmin_tokens.json
 *.fit
+build/
+*.egg-info/
+dist/
