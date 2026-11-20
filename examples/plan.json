@@ -1,0 +1,1076 @@
+{
+ "goal": {
+  "race": "Spring Marathon",
+  "short": "Marathon",
+  "date": "2027-04-18",
+  "target_time": "3:29:59",
+  "goal_pace": "4:58/km",
+  "goal_pace_watch": "4:54/km"
+ },
+ "zones_hr": {
+  "recovery": [
+   150,
+   165
+  ],
+  "easy": [
+   160,
+   170
+  ],
+  "steady": [
+   168,
+   172
+  ],
+  "threshold": [
+   173,
+   183
+  ],
+  "tempo_vo2": [
+   184,
+   194
+  ],
+  "interval": [
+   195,
+   210
+  ]
+ },
+ "zones_pace": {
+  "marathon": [
+   "4:52",
+   "4:58"
+  ],
+  "threshold": [
+   "4:40",
+   "4:50"
+  ],
+  "vo2": [
+   "4:00",
+   "4:15"
+  ]
+ },
+ "weekly_km_target": {
+  "0": 36,
+  "1": 42,
+  "2": 47,
+  "3": 52,
+  "4": 40,
+  "5": 50,
+  "6": 55,
+  "7": 60,
+  "8": 48,
+  "9": 64,
+  "10": 68,
+  "11": 70,
+  "12": 55,
+  "13": 75,
+  "14": 62,
+  "15": 48,
+  "16": 32
+ },
+ "benchmark": {
+  "hr": [
+   160,
+   165
+  ],
+  "km": 5,
+  "start_km": 2,
+  "baseline": {
+   "pace": "6:00/km",
+   "vertical_ratio_pct": 12.0
+  }
+ },
+ "checkpoints": [
+  {
+   "date": "2027-01-23",
+   "test": "5K parkrun/TT",
+   "on_track": "<=22:00"
+  },
+  {
+   "date": "2027-02-20",
+   "test": "10K race/TT",
+   "on_track": "<=45:00"
+  },
+  {
+   "date": "2027-03-20",
+   "test": "Half marathon",
+   "on_track": "<=1:40"
+  },
+  {
+   "dates": [
+    "2026-12-24",
+    "2027-01-21",
+    "2027-02-18",
+    "2027-03-18"
+   ],
+   "test": "Aerobic benchmark: 5 km at HR 160-165",
+   "on_track": "pace ~25-30 s/km faster by wk 12; vertical ratio ~1.5 points lower by wk 8"
+  }
+ ],
+ "rest_day_note": "Rest day (cross-training or strength is fine)",
+ "sessions": [
+  {
+   "date": "2026-12-23",
+   "week": 0,
+   "phase": "Kick-off",
+   "id": "W00-1",
+   "title": "Easy 7k + strides",
+   "type": "key",
+   "steps": "7 km Easy HR <=170 (HR 150-170) | 6 x [20 s Stride fast relaxed (by feel), 1 min Walk/jog (by feel)]"
+  },
+  {
+   "date": "2026-12-24",
+   "week": 0,
+   "phase": "Kick-off",
+   "id": "W00-2",
+   "title": "Aerobic benchmark",
+   "type": "test",
+   "steps": "2 km Warm up easy (HR 150-170) | 5 km Benchmark 5k HR 160-165 (HR 160-165) | 1 km Easy 1 km (HR 150-170) | 4 x [20 s Stride fast relaxed (by feel), 1 min Walk/jog (by feel)]"
+  },
+  {
+   "date": "2026-12-26",
+   "week": 0,
+   "phase": "Kick-off",
+   "id": "W00-3",
+   "title": "Parkrun progression",
+   "type": "key",
+   "steps": "1.5 km Jog to parkrun (HR 150-170) | 1 km Km 1 at 5:20 (5:25-5:15/km) | 1 km Km 2 at 5:10 (5:15-5:05/km) | 1 km Km 3 at 5:00 (5:05-4:55/km) | 1 km Km 4 at 4:50 (4:55-4:45/km) | 1 km Km 5 at 4:40 (4:45-4:35/km) | 1.5 km Jog home (HR 150-170)"
+  },
+  {
+   "date": "2026-12-27",
+   "week": 0,
+   "phase": "Kick-off",
+   "id": "W00-4",
+   "title": "Long 12k",
+   "type": "long",
+   "steps": "12 km Easy HR <=170 (HR 150-170)"
+  },
+  {
+   "date": "2026-12-28",
+   "week": 1,
+   "phase": "Rebuild",
+   "id": "W01-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2026-12-29",
+   "week": 1,
+   "phase": "Rebuild",
+   "id": "W01-1",
+   "title": "3x8min T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 3 x [8 min Threshold 8 min (4:50-4:40/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2026-12-30",
+   "week": 1,
+   "phase": "Rebuild",
+   "id": "W01-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2026-12-31",
+   "week": 1,
+   "phase": "Rebuild",
+   "id": "W01-2",
+   "title": "6x2min fast",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 6 x [2 min Fast 2 min (4:15-4:00/km), 1.5 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-01-01",
+   "week": 1,
+   "phase": "Rebuild",
+   "id": "W01-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-01-02",
+   "week": 1,
+   "phase": "Rebuild",
+   "id": "W01-3",
+   "title": "Long 16k",
+   "type": "long",
+   "steps": "16 km Easy HR <=170 (HR 150-170)"
+  },
+  {
+   "date": "2027-01-04",
+   "week": 2,
+   "phase": "Rebuild",
+   "id": "W02-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-01-05",
+   "week": 2,
+   "phase": "Rebuild",
+   "id": "W02-1",
+   "title": "3x10min T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 3 x [10 min Threshold 10 min (4:50-4:40/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-01-06",
+   "week": 2,
+   "phase": "Rebuild",
+   "id": "W02-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-01-07",
+   "week": 2,
+   "phase": "Rebuild",
+   "id": "W02-2",
+   "title": "5x3min fast",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 5 x [3 min Fast 3 min (4:15-4:00/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-01-08",
+   "week": 2,
+   "phase": "Rebuild",
+   "id": "W02-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-01-09",
+   "week": 2,
+   "phase": "Rebuild",
+   "id": "W02-3",
+   "title": "Long 18k",
+   "type": "long",
+   "steps": "18 km Easy HR <=170 (HR 150-170)"
+  },
+  {
+   "date": "2027-01-11",
+   "week": 3,
+   "phase": "Rebuild",
+   "id": "W03-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-01-12",
+   "week": 3,
+   "phase": "Rebuild",
+   "id": "W03-1",
+   "title": "2x15min T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 2 x [15 min Threshold 15 min (4:50-4:40/km), 3 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-01-13",
+   "week": 3,
+   "phase": "Rebuild",
+   "id": "W03-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-01-14",
+   "week": 3,
+   "phase": "Rebuild",
+   "id": "W03-2",
+   "title": "6x1k fast",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 6 x [1 km Fast 1000 m (4:15-4:00/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-01-15",
+   "week": 3,
+   "phase": "Rebuild",
+   "id": "W03-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-01-16",
+   "week": 3,
+   "phase": "Rebuild",
+   "id": "W03-3",
+   "title": "Long 20k",
+   "type": "long",
+   "steps": "16 km Easy HR <=170 (HR 150-170) | 4 km Steady HR 168-172 (HR 168-172)"
+  },
+  {
+   "date": "2027-01-18",
+   "week": 4,
+   "phase": "Rebuild",
+   "id": "W04-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-01-19",
+   "week": 4,
+   "phase": "Rebuild",
+   "id": "W04-1",
+   "title": "20min T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 20 min Threshold 20 min (4:50-4:40/km) | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-01-20",
+   "week": 4,
+   "phase": "Rebuild",
+   "id": "W04-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-01-21",
+   "week": 4,
+   "phase": "Rebuild",
+   "id": "W04-2",
+   "title": "Aerobic benchmark",
+   "type": "test",
+   "steps": "2 km Warm up easy (HR 150-170) | 5 km Benchmark 5k HR 160-165 (HR 160-165) | 1 km Easy 1 km (HR 150-170) | 4 x [20 s Stride fast relaxed (by feel), 1 min Walk/jog (by feel)]"
+  },
+  {
+   "date": "2027-01-22",
+   "week": 4,
+   "phase": "Rebuild",
+   "id": "W04-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-01-23",
+   "week": 4,
+   "phase": "Rebuild",
+   "id": "W04-3",
+   "title": "5K test",
+   "type": "test",
+   "steps": "2 km Warm up easy (HR 150-170) | 5 km 5K test - race it (by feel) | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-01-25",
+   "week": 5,
+   "phase": "Build",
+   "id": "W05-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-01-26",
+   "week": 5,
+   "phase": "Build",
+   "id": "W05-1",
+   "title": "4x8min T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 4 x [8 min Threshold 8 min (4:50-4:40/km), 1.5 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-01-27",
+   "week": 5,
+   "phase": "Build",
+   "id": "W05-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-01-28",
+   "week": 5,
+   "phase": "Build",
+   "id": "W05-2",
+   "title": "8x90s hills",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 8 x [1.5 min Uphill hard 90s (HR 184-194), open Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-01-29",
+   "week": 5,
+   "phase": "Build",
+   "id": "W05-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-01-30",
+   "week": 5,
+   "phase": "Build",
+   "id": "W05-3",
+   "title": "Long 22k",
+   "type": "long",
+   "steps": "22 km Easy HR <=170 (HR 150-170)"
+  },
+  {
+   "date": "2027-02-01",
+   "week": 6,
+   "phase": "Build",
+   "id": "W06-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-02-02",
+   "week": 6,
+   "phase": "Build",
+   "id": "W06-1",
+   "title": "3x12min T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 3 x [12 min Threshold 12 min (4:50-4:40/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-02-03",
+   "week": 6,
+   "phase": "Build",
+   "id": "W06-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-02-04",
+   "week": 6,
+   "phase": "Build",
+   "id": "W06-2",
+   "title": "6x1k fast",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 6 x [1 km Fast 1000 m (4:15-4:00/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-02-05",
+   "week": 6,
+   "phase": "Build",
+   "id": "W06-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-02-06",
+   "week": 6,
+   "phase": "Build",
+   "id": "W06-3",
+   "title": "Long 24k 5MP",
+   "type": "long",
+   "steps": "19 km Easy HR <=170 (HR 150-170) | 5 km Marathon pace (4:58-4:52/km)"
+  },
+  {
+   "date": "2027-02-08",
+   "week": 7,
+   "phase": "Build",
+   "id": "W07-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-02-09",
+   "week": 7,
+   "phase": "Build",
+   "id": "W07-1",
+   "title": "2x20min T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 2 x [20 min Threshold 20 min (4:50-4:40/km), 3 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-02-10",
+   "week": 7,
+   "phase": "Build",
+   "id": "W07-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-02-11",
+   "week": 7,
+   "phase": "Build",
+   "id": "W07-2",
+   "title": "3x3k MP",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 3 x [3 km Marathon pace 3 km (4:58-4:52/km), 1 km Easy 1 km (HR 150-170)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-02-12",
+   "week": 7,
+   "phase": "Build",
+   "id": "W07-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-02-13",
+   "week": 7,
+   "phase": "Build",
+   "id": "W07-3",
+   "title": "Long 26k 6MP",
+   "type": "long",
+   "steps": "20 km Easy HR <=170 (HR 150-170) | 6 km Marathon pace (4:58-4:52/km)"
+  },
+  {
+   "date": "2027-02-14",
+   "week": 7,
+   "phase": "Build",
+   "id": "W07-Sun",
+   "title": "Optional easy 6-8 km",
+   "type": "easy",
+   "steps": "6-8 km HR 160-170, or rest"
+  },
+  {
+   "date": "2027-02-15",
+   "week": 8,
+   "phase": "Build",
+   "id": "W08-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-02-16",
+   "week": 8,
+   "phase": "Build",
+   "id": "W08-1",
+   "title": "5x1k fast",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 5 x [1 km Fast 1000 m (4:15-4:00/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-02-17",
+   "week": 8,
+   "phase": "Build",
+   "id": "W08-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-02-18",
+   "week": 8,
+   "phase": "Build",
+   "id": "W08-2",
+   "title": "Aerobic benchmark",
+   "type": "test",
+   "steps": "2 km Warm up easy (HR 150-170) | 5 km Benchmark 5k HR 160-165 (HR 160-165) | 1 km Easy 1 km (HR 150-170) | 4 x [20 s Stride fast relaxed (by feel), 1 min Walk/jog (by feel)]"
+  },
+  {
+   "date": "2027-02-19",
+   "week": 8,
+   "phase": "Build",
+   "id": "W08-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-02-20",
+   "week": 8,
+   "phase": "Build",
+   "id": "W08-3",
+   "title": "10K test",
+   "type": "test",
+   "steps": "2 km Warm up easy (HR 150-170) | 10 km 10K test - race it (by feel) | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-02-21",
+   "week": 8,
+   "phase": "Build",
+   "id": "W08-Sun",
+   "title": "Optional easy 6-8 km",
+   "type": "easy",
+   "steps": "6-8 km HR 160-170, or rest"
+  },
+  {
+   "date": "2027-02-22",
+   "week": 9,
+   "phase": "Build",
+   "id": "W09-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-02-23",
+   "week": 9,
+   "phase": "Build",
+   "id": "W09-1",
+   "title": "5x6min T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 5 x [6 min Threshold 6 min (4:50-4:40/km), 1 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-02-24",
+   "week": 9,
+   "phase": "Build",
+   "id": "W09-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-02-25",
+   "week": 9,
+   "phase": "Build",
+   "id": "W09-2",
+   "title": "14k 10MP",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 10 km Marathon pace (4:58-4:52/km) | 2 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-02-26",
+   "week": 9,
+   "phase": "Build",
+   "id": "W09-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-02-27",
+   "week": 9,
+   "phase": "Build",
+   "id": "W09-3",
+   "title": "Long 28k 8MP",
+   "type": "long",
+   "steps": "20 km Easy HR <=170 (HR 150-170) | 8 km Marathon pace (4:58-4:52/km)"
+  },
+  {
+   "date": "2027-02-28",
+   "week": 9,
+   "phase": "Build",
+   "id": "W09-Sun",
+   "title": "Optional easy 6-8 km",
+   "type": "easy",
+   "steps": "6-8 km HR 160-170, or rest"
+  },
+  {
+   "date": "2027-03-01",
+   "week": 10,
+   "phase": "Marathon-specific",
+   "id": "W10-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-03-02",
+   "week": 10,
+   "phase": "Marathon-specific",
+   "id": "W10-1",
+   "title": "3x3k T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 3 x [3 km Threshold 3 km (4:50-4:40/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-03-03",
+   "week": 10,
+   "phase": "Marathon-specific",
+   "id": "W10-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-03-04",
+   "week": 10,
+   "phase": "Marathon-specific",
+   "id": "W10-2",
+   "title": "6x1k fast",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 6 x [1 km Fast 1000 m (4:15-4:00/km), 1.5 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-03-05",
+   "week": 10,
+   "phase": "Marathon-specific",
+   "id": "W10-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-03-06",
+   "week": 10,
+   "phase": "Marathon-specific",
+   "id": "W10-3",
+   "title": "Long 30k 3x5MP",
+   "type": "long",
+   "steps": "10 km Easy HR <=170 (HR 150-170) | 3 x [5 km Marathon pace (4:58-4:52/km), 1 km Steady 1 km (HR 168-172)] | 2 km Easy finish (HR 150-170)"
+  },
+  {
+   "date": "2027-03-07",
+   "week": 10,
+   "phase": "Marathon-specific",
+   "id": "W10-Sun",
+   "title": "Optional easy 6-8 km",
+   "type": "easy",
+   "steps": "6-8 km HR 160-170, or rest"
+  },
+  {
+   "date": "2027-03-08",
+   "week": 11,
+   "phase": "Marathon-specific",
+   "id": "W11-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-03-09",
+   "week": 11,
+   "phase": "Marathon-specific",
+   "id": "W11-1",
+   "title": "8x800 fast",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 8 x [0.8 km Fast 800 m (4:05-3:55/km), 0.4 km Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-03-10",
+   "week": 11,
+   "phase": "Marathon-specific",
+   "id": "W11-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-03-11",
+   "week": 11,
+   "phase": "Marathon-specific",
+   "id": "W11-2",
+   "title": "16k 12MP",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 12 km Marathon pace (4:58-4:52/km) | 2 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-03-12",
+   "week": 11,
+   "phase": "Marathon-specific",
+   "id": "W11-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-03-13",
+   "week": 11,
+   "phase": "Marathon-specific",
+   "id": "W11-3",
+   "title": "Long 32k 10MP",
+   "type": "long",
+   "steps": "22 km Easy HR <=170 (HR 150-170) | 10 km Marathon pace (4:58-4:52/km)"
+  },
+  {
+   "date": "2027-03-14",
+   "week": 11,
+   "phase": "Marathon-specific",
+   "id": "W11-Sun",
+   "title": "Optional easy 6-8 km",
+   "type": "easy",
+   "steps": "6-8 km HR 160-170, or rest"
+  },
+  {
+   "date": "2027-03-15",
+   "week": 12,
+   "phase": "Marathon-specific",
+   "id": "W12-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-03-16",
+   "week": 12,
+   "phase": "Marathon-specific",
+   "id": "W12-1",
+   "title": "4x1k T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 4 x [1 km Threshold 1000 m (4:50-4:40/km), 1.5 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-03-17",
+   "week": 12,
+   "phase": "Marathon-specific",
+   "id": "W12-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-03-18",
+   "week": 12,
+   "phase": "Marathon-specific",
+   "id": "W12-2",
+   "title": "Aerobic benchmark",
+   "type": "test",
+   "steps": "2 km Warm up easy (HR 150-170) | 5 km Benchmark 5k HR 160-165 (HR 160-165) | 1 km Easy 1 km (HR 150-170) | 4 x [20 s Stride fast relaxed (by feel), 1 min Walk/jog (by feel)]"
+  },
+  {
+   "date": "2027-03-19",
+   "week": 12,
+   "phase": "Marathon-specific",
+   "id": "W12-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-03-20",
+   "week": 12,
+   "phase": "Marathon-specific",
+   "id": "W12-3",
+   "title": "Half test",
+   "type": "test",
+   "steps": "1.5 km Warm up easy (HR 150-170) | 21.1 km Half marathon - race it (by feel) | 1 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-03-21",
+   "week": 12,
+   "phase": "Marathon-specific",
+   "id": "W12-Sun",
+   "title": "Optional easy 6-8 km",
+   "type": "easy",
+   "steps": "6-8 km HR 160-170, or rest"
+  },
+  {
+   "date": "2027-03-22",
+   "week": 13,
+   "phase": "Marathon-specific",
+   "id": "W13-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-03-23",
+   "week": 13,
+   "phase": "Marathon-specific",
+   "id": "W13-1",
+   "title": "2x5k T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 2 x [5 km Threshold 5 km (4:50-4:40/km), 3 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-03-24",
+   "week": 13,
+   "phase": "Marathon-specific",
+   "id": "W13-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-03-25",
+   "week": 13,
+   "phase": "Marathon-specific",
+   "id": "W13-2",
+   "title": "18k 14MP",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 14 km Marathon pace (4:58-4:52/km) | 2 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-03-26",
+   "week": 13,
+   "phase": "Marathon-specific",
+   "id": "W13-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-03-27",
+   "week": 13,
+   "phase": "Marathon-specific",
+   "id": "W13-3",
+   "title": "PEAK 32k 2x8MP",
+   "type": "long",
+   "steps": "8 km Easy HR <=170 (HR 150-170) | 8 km Marathon pace (4:58-4:52/km) | 2 km Easy 2 km (HR 150-170) | 8 km Marathon pace (4:58-4:52/km) | 6 km Easy finish (HR 150-170)"
+  },
+  {
+   "date": "2027-03-28",
+   "week": 13,
+   "phase": "Marathon-specific",
+   "id": "W13-Sun",
+   "title": "Optional easy 6-8 km",
+   "type": "easy",
+   "steps": "6-8 km HR 160-170, or rest"
+  },
+  {
+   "date": "2027-03-29",
+   "week": 14,
+   "phase": "Taper",
+   "id": "W14-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-03-30",
+   "week": 14,
+   "phase": "Taper",
+   "id": "W14-1",
+   "title": "3x3k T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 3 x [3 km Threshold 3 km (4:50-4:40/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-03-31",
+   "week": 14,
+   "phase": "Taper",
+   "id": "W14-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-04-01",
+   "week": 14,
+   "phase": "Taper",
+   "id": "W14-2",
+   "title": "12k 8MP",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 8 km Marathon pace (4:58-4:52/km) | 2 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-04-02",
+   "week": 14,
+   "phase": "Taper",
+   "id": "W14-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-04-03",
+   "week": 14,
+   "phase": "Taper",
+   "id": "W14-3",
+   "title": "Long 26k 12MP",
+   "type": "long",
+   "steps": "14 km Easy HR <=170 (HR 150-170) | 12 km Marathon pace (4:58-4:52/km)"
+  },
+  {
+   "date": "2027-04-04",
+   "week": 14,
+   "phase": "Taper",
+   "id": "W14-Sun",
+   "title": "Optional easy 6-8 km",
+   "type": "easy",
+   "steps": "6-8 km HR 160-170, or rest"
+  },
+  {
+   "date": "2027-04-05",
+   "week": 15,
+   "phase": "Taper",
+   "id": "W15-Mon",
+   "title": "Easy run + drills + strides",
+   "type": "easy",
+   "steps": "7-10 km HR 160-170, then 5 min drills (A-skips, quick feet, pogo hops) and 6 x 20 s strides"
+  },
+  {
+   "date": "2027-04-06",
+   "week": 15,
+   "phase": "Taper",
+   "id": "W15-1",
+   "title": "5x1k T",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 5 x [1 km Threshold 1000 m (4:50-4:40/km), 1.5 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-04-07",
+   "week": 15,
+   "phase": "Taper",
+   "id": "W15-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-04-08",
+   "week": 15,
+   "phase": "Taper",
+   "id": "W15-2",
+   "title": "10k 6MP",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 6 km Marathon pace (4:58-4:52/km) | 2 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-04-09",
+   "week": 15,
+   "phase": "Taper",
+   "id": "W15-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-04-10",
+   "week": 15,
+   "phase": "Taper",
+   "id": "W15-3",
+   "title": "Long 18k 5MP",
+   "type": "long",
+   "steps": "13 km Easy HR <=170 (HR 150-170) | 5 km Marathon pace (4:58-4:52/km)"
+  },
+  {
+   "date": "2027-04-11",
+   "week": 15,
+   "phase": "Taper",
+   "id": "W15-Sun",
+   "title": "Optional easy 6-8 km",
+   "type": "easy",
+   "steps": "6-8 km HR 160-170, or rest"
+  },
+  {
+   "date": "2027-04-13",
+   "week": 16,
+   "phase": "Taper",
+   "id": "W16-1",
+   "title": "3x2k MP",
+   "type": "key",
+   "steps": "2 km Warm up easy (HR 150-170) | 3 x [2 km Marathon pace 2 km (4:58-4:52/km), 2 min Jog recovery (by feel)] | 1.5 km Cool down easy (HR 150-170)"
+  },
+  {
+   "date": "2027-04-14",
+   "week": 16,
+   "phase": "Taper",
+   "id": "W16-Wed",
+   "title": "Recovery run + S&C",
+   "type": "easy",
+   "steps": "8-12 km HR <=165, then 25 min strength (split squats, step-ups, single-leg RDL, calf raises, planks)"
+  },
+  {
+   "date": "2027-04-15",
+   "week": 16,
+   "phase": "Taper",
+   "id": "W16-2",
+   "title": "Easy 6k + strides",
+   "type": "key",
+   "steps": "6 km Easy HR <=170 (HR 150-170) | 4 x [20 s Stride fast relaxed (by feel), 1 min Walk/jog (by feel)]"
+  },
+  {
+   "date": "2027-04-16",
+   "week": 16,
+   "phase": "Taper",
+   "id": "W16-Fri",
+   "title": "Rest (cross-training or strength ok)",
+   "type": "rest"
+  },
+  {
+   "date": "2027-04-17",
+   "week": 16,
+   "phase": "Taper",
+   "id": "W16-3",
+   "title": "Shakeout",
+   "type": "key",
+   "steps": "4 km Easy HR <=170 (HR 150-170) | 3 x [1 min Marathon pace 1 min (4:58-4:52/km), 1 min Jog recovery (by feel)]"
+  },
+  {
+   "date": "2027-04-18",
+   "week": 16,
+   "phase": "Taper",
+   "id": "W16-4",
+   "title": "Race day",
+   "type": "race",
+   "steps": "5 km Km 0-5 controlled (5:04-4:58/km) | 25 km Km 5-30 goal pace (4:58-4:52/km) | 12.2 km Km 30-42 hold or push (4:58-4:52/km)"
+  }
+ ]
+}

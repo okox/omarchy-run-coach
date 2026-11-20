@@ -1,0 +1,9 @@
+[Unit]
+Description=Run Coach: watch your .fit folder
+
+[Path]
+PathChanged=@FOLDER@
+Unit=run-coach-scan.service
+
+[Install]
+WantedBy=default.target

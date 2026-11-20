@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+# never commit personal data or logins
+plan.json
+!examples/plan.json
+state.json
+strava.json
+garmin_tokens.json
+*.fit

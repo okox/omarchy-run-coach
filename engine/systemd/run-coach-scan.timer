@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Coach: sync Garmin Connect and Strava, roll the day over
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=15min
+OnCalendar=*-*-* 00:01:00
+Persistent=true
+Unit=run-coach-scan.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#1a1b26"/>
+  <!-- weekly volume bars building toward race day -->
+  <g fill="#7aa2f7" opacity="0.28">
+    <rect x="86"  y="330" width="40" height="96" rx="8"/>
+    <rect x="142" y="300" width="40" height="126" rx="8"/>
+    <rect x="198" y="262" width="40" height="164" rx="8"/>
+    <rect x="254" y="226" width="40" height="200" rx="8"/>
+    <rect x="310" y="196" width="40" height="230" rx="8"/>
+  </g>
+  <!-- the route rising to the finish -->
+  <polyline points="106,318 162,284 218,250 274,206 330,170 392,128"
+            fill="none" stroke="#7aa2f7" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="106" cy="318" r="16" fill="#7aa2f7"/>
+  <!-- finish flag -->
+  <line x1="392" y1="150" x2="392" y2="62" stroke="#c0caf5" stroke-width="12" stroke-linecap="round"/>
+  <g transform="translate(398 64)">
+    <rect width="64" height="44" rx="4" fill="#c0caf5"/>
+    <rect x="0"  y="0"  width="16" height="11" fill="#1a1b26"/>
+    <rect x="32" y="0"  width="16" height="11" fill="#1a1b26"/>
+    <rect x="16" y="11" width="16" height="11" fill="#1a1b26"/>
+    <rect x="48" y="11" width="16" height="11" fill="#1a1b26"/>
+    <rect x="0"  y="22" width="16" height="11" fill="#1a1b26"/>
+    <rect x="32" y="22" width="16" height="11" fill="#1a1b26"/>
+    <rect x="16" y="33" width="16" height="11" fill="#1a1b26"/>
+    <rect x="48" y="33" width="16" height="11" fill="#1a1b26"/>
+  </g>
+</svg>

@@ -1,0 +1,7 @@
+[Unit]
+Description=Run Coach: import new runs and refresh the bar
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/run-coach scan
+Nice=10
