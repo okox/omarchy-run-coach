@@ -55,6 +55,7 @@ Panel {
   readonly property var zoneKeys: ["recovery", "easy", "steady", "threshold", "tempo_vo2", "interval"]
   function zoneColor(key) {
     var i = zoneKeys.indexOf(key)
+    if (i < 0 && /^z[1-5]$/.test(key)) i = (Number(key[1]) - 1) * 1.25
     if (i < 0) return dim
     var calm = Qt.rgba(selTint.r, selTint.g, selTint.b, 1)
     return i < 3 ? mix(calm, cAccent, i / 2) : mix(cAccent, cRed, (i - 2) / 3)
@@ -206,6 +207,7 @@ Panel {
       panelFlick.contentY = 0
       root.weekIdx = -1
       root.selDate = ""
+      root.sessOff = 0
       root.refresh()
       Qt.callLater(function() { keyCatcher.forceActiveFocus() })
     }
@@ -303,6 +305,44 @@ Panel {
   // ---- panel --------------------------------------------------------------
 
   readonly property var cur: st ? st.current : null
+  readonly property var planInfo: st && st.plan ? st.plan : null
+  readonly property bool hasPlan: !!(planInfo && planInfo.exists && !planInfo.errors)
+
+  // Session browser: 0 is the current session; arrows step through the
+  // plan's days (rest days included).
+  property int sessOff: 0
+  readonly property var sessList: st && st.sessions ? st.sessions : []
+  readonly property int curIdx: {
+    if (!cur) return -1
+    for (var i = 0; i < sessList.length; i++) if (sessList[i].id === cur.id) return i
+    return -1
+  }
+  readonly property int shownIdx2: curIdx < 0 ? -1 : Math.max(0, Math.min(sessList.length - 1, curIdx + sessOff))
+  readonly property var shown: sessOff === 0 || shownIdx2 < 0 ? cur : sessList[shownIdx2]
+  readonly property bool shownRest: !!(shown && shown.type === "rest")
+  readonly property string shownVerdict: shown ? (shown.result ? shown.result.verdict : (shown.verdict || "")) : ""
+  function stepSession(n) {
+    if (curIdx < 0) return
+    var i = Math.max(0, Math.min(sessList.length - 1, curIdx + sessOff + n))
+    sessOff = i - curIdx
+  }
+  function dayLabel(iso) {
+    if (!iso || !st) return ""
+    var diff = Math.round((new Date(iso + "T12:00:00") - new Date(st.today + "T12:00:00")) / 86400000)
+    if (diff === 0) return "Today"
+    if (diff === 1) return "Tomorrow · " + shortDate(iso)
+    if (diff === -1) return "Yesterday · " + shortDate(iso)
+    return shortDate(iso)
+  }
+
+  // Questions and logins happen in a terminal.
+  function inTerminal(cmd) {
+    Quickshell.execDetached(["setsid", "-f", "xdg-terminal-exec", "--title=Run Coach", "bash", "-c",
+      root.coachBin + " " + cmd + "; echo; read -rsn1 -p 'Press any key to close'"])
+    root.close()
+  }
+  function openUrl(u) { Quickshell.execDetached(["xdg-open", u]); root.close() }
+  readonly property string repoUrl: "https://github.com/okox/omarchy-run-coach"
   readonly property var lastRun: st ? st.last_run : null
   readonly property var race: st ? st.race : null
   readonly property var checkpoint: st ? st.next_checkpoint : null
@@ -346,8 +386,8 @@ Panel {
     if (f.vo2max) out.push(["VO2 max", String(f.vo2max), "Running VO2 max, last updated " + shortDate(f.vo2max_date)])
     if (f.predictions) out.push(["Marathon pred.", hms(f.predictions.marathon),
       "Garmin race predictions\n5K " + hms(f.predictions.k5) + " · 10K " + hms(f.predictions.k10)
-      + " · Half " + hms(f.predictions.half) + "\nGoal " + hms(f.goal_s) + ": "
-      + hms(Math.abs(f.predictions.marathon - f.goal_s)) + (f.predictions.marathon > f.goal_s ? " to go" : " ahead")])
+      + " · Half " + hms(f.predictions.half) + (f.goal_s ? "\nGoal " + hms(f.goal_s) + ": "
+      + hms(Math.abs(f.predictions.marathon - f.goal_s)) + (f.predictions.marathon > f.goal_s ? " to go" : " ahead") : "")])
     if (f.readiness) out.push(["Readiness", f.readiness.score + " " + f.readiness.level,
       "Sleep score " + f.readiness.sleep + " · recovery left " + f.readiness.recovery_h + " h"])
     if (f.endurance) out.push(["Endurance", f.endurance.score + " " + f.endurance.class,
@@ -447,6 +487,8 @@ Panel {
         else if (k === "p") root.openPlan()
         else if (k === "h") weekBack.go()
         else if (k === "l") weekFwd.go()
+        else if (k === ",") root.stepSession(-1)
+        else if (k === ".") root.stepSession(1)
       }
 
       Flickable {
@@ -496,13 +538,118 @@ Panel {
               id: colPlan
               width: cols.usable * 0.34
               spacing: Style.space(14)
+
+              // ---- No plan yet (or a broken one) ----
+              Card {
+                visible: !!(root.planInfo && (!root.planInfo.exists || root.planInfo.errors))
+                hero: true
+                SectionHead { key: "addplan"; title: root.planInfo && root.planInfo.errors ? "Your plan needs a fix" : "Add a training plan" }
+                Column {
+                  width: parent.width
+                  spacing: Style.space(10)
+                  visible: root.isOpen("addplan")
+                  PText {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Style.font.body
+                    text: root.planInfo && root.planInfo.errors
+                          ? root.planInfo.errors.slice(0, -1).join("\n")
+                          : "Run Coach already shows your runs, HR zones and fitness. With a plan it also gives you "
+                            + "the day's session in the bar, checks each run against it and counts down to your race."
+                  }
+                  PText {
+                    visible: !!(root.planInfo && !root.planInfo.errors)
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Style.font.bodySmall
+                    color: root.dim
+                    text: root.planInfo && root.planInfo.can_ai
+                          ? "Answer a few questions and Claude writes a plan for your race, or converts one you already have. Or start from the built-in 16-week marathon plan."
+                          : "Start from the built-in 16-week marathon plan, moved to your race date with paces scaled to your goal. (Install Claude Code to have one written for you.)"
+                  }
+                  Row {
+                    spacing: Style.space(6)
+                    Button {
+                      visible: !!(root.planInfo && !root.planInfo.errors)
+                      text: "Create a plan"; iconText: "󰐕"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.inTerminal("new-plan")
+                    }
+                    Button {
+                      visible: !!(root.planInfo && root.planInfo.errors)
+                      text: "Edit plan"; iconText: "󰏫"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.inTerminal("edit-plan")
+                    }
+                    Button {
+                      text: "Plan format"; iconText: "󰋗"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.openUrl(root.repoUrl + "/blob/main/engine/PLAN.md")
+                    }
+                  }
+                }
+              }
+
+              // ---- Nothing connected yet ----
+              Card {
+                visible: !!(root.sources && !root.sources.garmin_connected && !root.sources.strava_connected
+                            && !root.sources.activity_dir && !root.sources.garmin_last_activity)
+                SectionHead { key: "connect"; title: "Connect your runs" }
+                Column {
+                  width: parent.width
+                  spacing: Style.space(10)
+                  visible: root.isOpen("connect")
+                  PText {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    font.pixelSize: Style.font.body
+                    text: "Garmin Connect brings each run's full detail and your fitness numbers. Strava works with "
+                          + "any watch (it needs a free API app first). Each opens a terminal to log in."
+                  }
+                  Row {
+                    spacing: Style.space(6)
+                    Button {
+                      text: "Garmin"; iconText: "󰖟"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.inTerminal("garmin-auth")
+                    }
+                    Button {
+                      text: "Strava"; iconText: "󰖟"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.inTerminal("strava-auth")
+                    }
+                    Button {
+                      text: "How"; iconText: "󰋗"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.openUrl(root.repoUrl + "#getting-your-runs-in")
+                    }
+                  }
+                }
+              }
               Card {
                 visible: root.cur !== null
                 hero: true
                 SectionHead {
                   visible: root.cur !== null
                   key: "session"
-                  title: root.st && root.st.current_is_today ? "Today" : "Next session"
+                  title: root.shown ? root.dayLabel(root.shown.date) : ""
+                  Row {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: Style.space(10)
+                    ArrowText {
+                      visible: root.sessOff !== 0
+                      glyph: "󰃭"
+                      tip: root.st && root.st.current_is_today ? "Back to today" : "Back to the next session"
+                      onActivated: root.sessOff = 0
+                    }
+                    ArrowText {
+                      glyph: "󰅁"
+                      enabled: root.curIdx >= 0 && root.curIdx + root.sessOff > 0
+                      tip: "Previous day (,)"
+                      onActivated: root.stepSession(-1)
+                    }
+                    ArrowText {
+                      glyph: "󰅂"
+                      enabled: root.curIdx >= 0 && root.curIdx + root.sessOff < root.sessList.length - 1
+                      tip: "Next day (.)"
+                      onActivated: root.stepSession(1)
+                    }
+                  }
                 }
                 Column {
                   width: parent.width
@@ -517,8 +664,9 @@ Panel {
                     Text {
                       id: heroGlyph
                       textFormat: Text.PlainText
-                      text: root.barInfo.glyph || "󰜎"
-                      color: root.barTint
+                      text: root.sessOff === 0 ? (root.barInfo.glyph || "󰜎") : (root.shownRest ? "󰒲" : "󰜎")
+                      color: root.sessOff === 0 ? root.barTint
+                             : (root.shown && root.shown.status !== "planned" ? root.stateColor(root.shown.status) : root.foreground)
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.displayLarge
                       anchors.left: parent.left
@@ -539,34 +687,35 @@ Panel {
                         wrapMode: Text.Wrap
                         font.pixelSize: Style.font.heading
                         font.bold: true
-                        text: root.cur ? ((root.st.current_is_today ? "" : root.cur.dow + " " + root.cur.date.slice(8) + " · ") + root.cur.title) : ""
+                        text: root.shown ? (root.shownRest ? "Rest day" : root.shown.title) : ""
                       }
                       PText {
                         id: heroStatus
-                        color: root.cur ? root.stateColor(root.cur.status) : root.dim
+                        visible: !root.shownRest
+                        color: root.shown ? root.stateColor(root.shown.status) : root.dim
                         font.pixelSize: Style.font.body
-                        text: root.cur ? root.statusLabel(root.cur.status) + (root.cur.moved ? " · moved" : "") : ""
+                        text: root.shown ? root.statusLabel(root.shown.status) + (root.shown.moved ? " · moved" : "") : ""
                       }
                       PText {
                         width: parent.width
                         elide: Text.ElideRight
                         color: root.dim
                         font.pixelSize: Style.font.bodySmall
-                        text: root.cur ? [root.cur.id, "Week " + root.cur.week + " " + root.cur.phase,
-                                          root.cur.garmin ? "Watch: " + root.cur.garmin : ""].filter(function(x) { return x }).join("  ·  ") : ""
+                        text: root.shown ? [root.shown.id, "Week " + root.shown.week + " " + root.shown.phase,
+                                          root.shown.garmin ? "Watch: " + root.shown.garmin : ""].filter(function(x) { return x }).join("  ·  ") : ""
                       }
                       PText {
-                        visible: !!(root.st && root.st.today_rest)
+                        visible: root.shownRest || (root.sessOff === 0 && !!(root.st && root.st.today_rest))
                         color: root.dim
                         font.pixelSize: Style.font.body
-                        text: root.st && root.st.rest_note ? root.st.rest_note : "Rest day"
+                        text: (root.sessOff === 0 && !root.shownRest ? "Today: " : "") + (root.st && root.st.rest_note ? root.st.rest_note : "Rest day")
                       }
                       Column {
                         width: parent.width
                         topPadding: Style.space(4)
                         spacing: Style.space(2)
                         Repeater {
-                          model: root.cur ? root.cur.steps : []
+                          model: root.shown && !root.shownRest ? root.shown.steps : []
                           PText {
                             required property var modelData
                             width: parent.width
@@ -577,36 +726,36 @@ Panel {
                         }
                       }
                       PText {
-                        visible: !!(root.cur && root.cur.result)
+                        visible: root.shownVerdict !== ""
                         width: parent.width
                         wrapMode: Text.Wrap
-                        color: root.cur && root.cur.result ? root.stateColor(root.cur.result.status) : root.foreground
+                        color: root.shown ? root.stateColor(root.shown.result ? root.shown.result.status : root.shown.status) : root.foreground
                         font.pixelSize: Style.font.body
-                        text: root.cur && root.cur.result ? root.cur.result.verdict : ""
+                        text: root.shownVerdict
                       }
                     }
                   }
 
                   // ---- Actions ----
                   Row {
-                    visible: root.cur !== null
+                    visible: root.shown !== null && !root.shownRest
                     spacing: Style.space(6)
                     Button {
                       text: "Done"; iconText: "󰄬"; bordered: true; fontSize: Style.font.body
-                      onClicked: root.runCoach(["mark", "done", root.cur.id])
+                      onClicked: root.runCoach(["mark", "done", root.shown.id])
                     }
                     Button {
                       text: "Skip"; iconText: "󰒭"; bordered: true; fontSize: Style.font.body
-                      onClicked: root.runCoach(["mark", "skip", root.cur.id])
+                      onClicked: root.runCoach(["mark", "skip", root.shown.id])
                     }
                     Button {
-                      text: "Move to tomorrow"; iconText: "󰁔"; bordered: true; fontSize: Style.font.body
-                      onClicked: root.runCoach(["mark", "move", root.cur.id])
+                      text: "Move to next day"; iconText: "󰁔"; bordered: true; fontSize: Style.font.body
+                      onClicked: root.runCoach(["mark", "move", root.shown.id])
                     }
                     Button {
-                      visible: !!(root.cur && (root.cur.moved || root.cur.manual))
+                      visible: !!(root.shown && (root.shown.moved || root.shown.manual))
                       text: "Undo"; iconText: "󰕌"; bordered: true; fontSize: Style.font.body
-                      onClicked: root.runCoach(["mark", "clear", root.cur.id])
+                      onClicked: root.runCoach(["mark", "clear", root.shown.id])
                     }
                   }
                 }
@@ -642,7 +791,7 @@ Panel {
                           font.pixelSize: Style.font.heading
                           font.bold: true
                           color: root.cTitle
-                          text: root.week ? "Week " + root.week.number + (root.week.phase ? " · " + root.week.phase : "") : ""
+                          text: root.week ? (root.week.label || "Week " + root.week.number) + (root.week.phase ? " · " + root.week.phase : "") : ""
                         }
                         ArrowText {
                           id: weekFwd
@@ -658,8 +807,8 @@ Panel {
                         anchors.verticalCenter: parent.verticalCenter
                         font.pixelSize: Style.font.bodySmall
                         color: root.dim
-                        text: root.week ? root.week.km.toFixed(1) + "/" + root.week.target + " km · "
-                                          + root.week.done + "/" + root.week.planned + " sessions" : ""
+                        text: !root.week ? "" : root.week.target ? root.week.km.toFixed(1) + "/" + root.week.target + " km · "
+                                          + root.week.done + "/" + root.week.planned + " sessions" : root.week.km.toFixed(1) + " km"
                       }
                     }
                   }
@@ -779,7 +928,7 @@ Panel {
                         id: volLabel
                         font.pixelSize: Style.font.bodySmall
                         color: root.dim
-                        text: "Weekly km  ·  plan to race day"
+                        text: root.hasPlan ? "Weekly km  ·  plan to race day" : "Weekly km  ·  last 12 weeks"
                       }
 
                       Repeater {
@@ -829,7 +978,8 @@ Panel {
                           }
                           PanelToolTip {
                             visible: wkMouse.containsMouse
-                            text: "Week " + wk.modelData.week + (wk.modelData.phase ? " · " + wk.modelData.phase : "")
+                            text: !root.hasPlan ? (wk.modelData.label || "") + "\n" + (wk.past ? wk.modelData.km.toFixed(1) : "0") + " km"
+                                  : "Week " + wk.modelData.week + (wk.modelData.phase ? " · " + wk.modelData.phase : "")
                                   + "  (" + root.shortDate(wk.modelData.monday) + ")\n"
                                   + (wk.past ? wk.modelData.km.toFixed(1) + " of " + wk.modelData.target + " km planned"
                                              : wk.modelData.target + " km planned")
@@ -992,11 +1142,11 @@ Panel {
                           ["Time", root.det.duration],
                           ["Pace", root.det.pace + " /km"],
                           ["Avg HR", (root.det.avg_hr || "-") + (root.det.max_hr ? "  (max " + root.det.max_hr + ")" : "")],
-                          ["Above cap", root.det.pct_above_cap !== undefined ? root.det.pct_above_cap + "% > " + root.det.cap : "-"],
+                          root.det.cap ? ["Above cap", root.det.pct_above_cap + "% > " + root.det.cap] : null,
                           ["Vertical ratio", root.det.vr ? root.det.vr + "%" : "-"],
                           ["Cadence", root.det.cadence ? root.det.cadence + " spm" : "-"],
                           ["Ground contact", root.det.gct ? root.det.gct + " ms" : "-"]
-                        ] : []
+                        ].filter(function(x) { return x }) : []
                         Column {
                           required property var modelData
                           width: parent.width / 4
@@ -1405,8 +1555,13 @@ Panel {
                 onClicked: { root.runCoach(["dashboard", "--open"]); root.close() }
               }
               Button {
+                visible: root.hasPlan
+                text: "Edit plan"; iconText: "󰏫"; bordered: true; fontSize: Style.font.body
+                onClicked: root.inTerminal("edit-plan")
+              }
+              Button {
+                visible: !!(root.st && root.st.plan_html)
                 text: "Full plan"; iconText: "󰈈"; bordered: true; fontSize: Style.font.body
-                enabled: !!(root.st && root.st.plan_html)
                 onClicked: { root.openPlan(); root.close() }
               }
             }
@@ -1641,7 +1796,7 @@ Panel {
     readonly property real t1: fit ? new Date(fit.race_date + "T12:00:00").getTime() : 1
     readonly property var yRange: {
       if (!fit) return [0, 1]
-      var lo = fit.goal_s, hi = fit.goal_s
+      var lo = fit.goal_s || (trend.length ? trend[0][1] : 0), hi = lo
       for (var i = 0; i < trend.length; i++) { lo = Math.min(lo, trend[i][1]); hi = Math.max(hi, trend[i][1]) }
       return [lo - 300, hi + 300]
     }
@@ -1667,12 +1822,14 @@ Panel {
         var ctx = getContext("2d"); ctx.reset()
         if (!tc.fit) return
         // goal: dashed reference line across to race day
-        ctx.strokeStyle = root.cGreen; ctx.globalAlpha = 0.8; ctx.lineWidth = 1
-        ctx.setLineDash([4, 4]); ctx.beginPath()
-        var gy = tc.yOf(tc.fit.goal_s); ctx.moveTo(0, gy); ctx.lineTo(width, gy); ctx.stroke()
-        // plan start and today
+        if (tc.fit.goal_s) {
+          ctx.strokeStyle = root.cGreen; ctx.globalAlpha = 0.8; ctx.lineWidth = 1
+          ctx.setLineDash([4, 4]); ctx.beginPath()
+          var gy = tc.yOf(tc.fit.goal_s); ctx.moveTo(0, gy); ctx.lineTo(width, gy); ctx.stroke()
+        }
+        // plan start
         ctx.setLineDash([]); ctx.strokeStyle = root.foreground; ctx.globalAlpha = 0.18
-        var ps = tc.xOf(tc.fit.plan_start); ctx.beginPath(); ctx.moveTo(ps, 0); ctx.lineTo(ps, height); ctx.stroke()
+        if (tc.fit.plan_start) { var ps = tc.xOf(tc.fit.plan_start); ctx.beginPath(); ctx.moveTo(ps, 0); ctx.lineTo(ps, height); ctx.stroke() }
         // prediction line
         ctx.globalAlpha = 1; ctx.strokeStyle = root.cAccent; ctx.lineWidth = 2; ctx.lineJoin = "round"; ctx.beginPath()
         for (var i = 0; i < tc.trend.length; i++) {
@@ -1687,6 +1844,7 @@ Panel {
 
     // direct labels on the right: the latest prediction and the goal
     PText {
+      visible: !!(tc.fit && tc.fit.goal_s)
       x: tc.plotW + Style.space(6)
       y: tcCanvas.y + tc.yOf(tc.fit ? tc.fit.goal_s : 0) - height / 2
       font.pixelSize: Style.font.bodySmall; color: root.dim
@@ -1706,10 +1864,11 @@ Panel {
       width: tc.plotW; height: tcA.implicitHeight
       PText { id: tcA; font.pixelSize: Style.font.bodySmall; color: root.dim; text: tc.trend.length ? root.shortDate(tc.trend[0][0]) : "" }
       PText {
+        visible: !!(tc.fit && tc.fit.plan_start)
         x: Math.max(tcA.implicitWidth + Style.space(8), tc.xOf(tc.fit ? tc.fit.plan_start : "") - implicitWidth / 2)
         font.pixelSize: Style.font.bodySmall; color: root.dim; text: "plan start"
       }
-      PText { anchors.right: parent.right; font.pixelSize: Style.font.bodySmall; color: root.dim; text: "race day" }
+      PText { anchors.right: parent.right; font.pixelSize: Style.font.bodySmall; color: root.dim; text: tc.fit && tc.fit.goal_s ? "race day" : "today" }
     }
 
     Rectangle {

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "okox.run-coach",
   "name": "Run Coach",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "author": "okox",
   "license": "MIT",
   "description": "Your running plan in the bar: today's session, the week, each run judged against its plan (pace/HR chart, HR zones, coach note), Garmin and Strava fitness, and the race countdown. Reads ~/.local/state/run-coach/status.json, written by the run-coach engine (run setup.sh).",

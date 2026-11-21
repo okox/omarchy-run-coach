@@ -106,7 +106,8 @@ const meaning = d => ({ done: "Done, on plan", warn: "Done, but off plan", misse
 // HR zones are ordered: one ramp from the shell's selection tint (calm) to red (hot).
 const hex = c => { const m = /^#?([0-9a-f]{6})$/i.exec(c.trim()); const n = m ? parseInt(m[1], 16) : 0x808080; return [n >> 16, n >> 8 & 255, n & 255]; };
 const mixc = (a, b, t) => { const x = hex(a), y = hex(b); return "rgb(" + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(",") + ")"; };
-const zoneColor = k => { const i = ["recovery", "easy", "steady", "threshold", "tempo_vo2", "interval"].indexOf(k); if (i < 0) return css("--dim");
+const zoneColor = k => { let i = ["recovery", "easy", "steady", "threshold", "tempo_vo2", "interval"].indexOf(k);
+  if (i < 0 && /^z[1-5]$/.test(k)) i = (Number(k[1]) - 1) * 1.25; if (i < 0) return css("--dim");
   return i < 3 ? mixc(css("--sel"), css("--accent"), i / 2) : mixc(css("--accent"), css("--red"), (i - 2) / 3); };
 const stageColor = k => ({ warmup: css("--accent"), cooldown: css("--accent"), active: css("--fg"), interval: css("--red") }[k] || css("--dim"));
 const stageAlpha = k => ({ warmup: .12, cooldown: .12, active: .05, interval: .2 }[k] || .04);
@@ -142,17 +143,42 @@ function chartBox(parent, height, draw) {
 }
 
 // ---- Plan column ---------------------------------------------------------
+let sessOff = 0;
+function dayLabel(iso) {
+  const diff = Math.round((new Date(iso + "T12:00:00") - new Date(ST.today + "T12:00:00")) / 864e5);
+  return diff === 0 ? "Today" : diff === 1 ? "Tomorrow · " + shortDate(iso) : diff === -1 ? "Yesterday · " + shortDate(iso) : shortDate(iso);
+}
 function renderPlan() {
   const col = $("#colPlan"); col.innerHTML = "";
-  const cur = ST.current;
-  if (cur) {
-    const [s, b] = section("session", ST.current_is_today ? "Today" : "Next session", statusLabel(cur.status) + (cur.moved ? " · moved" : ""));
+  const P = ST.plan || {};
+  if (!P.exists || P.errors) {
+    const [s, b] = section("addplan", P.errors ? "Your plan needs a fix" : "Add a training plan");
     s.classList.add("hero");
-    b.append(h("div", {}, `<div class="htitle">${esc((ST.current_is_today ? "" : cur.dow + " " + cur.date.slice(8) + " · ") + cur.title)}</div>
+    b.append(h("div", {}, P.errors ? esc(P.errors.slice(0, -1).join("\n")).replace(/\n/g, "<br>")
+      : "Run Coach already shows your runs, HR zones and fitness. With a plan it also gives you the day's session, checks each run against it and counts down to your race."));
+    b.append(h("div", { class: "dim small" }, P.errors ? "Fix it in a terminal: <code>run-coach edit-plan</code>"
+      : "In a terminal: <code>run-coach new-plan</code> " + (P.can_ai ? "(Claude writes a plan from a few questions, or converts yours)" : "(starts from the built-in marathon plan)")
+        + ` · <a href="https://github.com/okox/omarchy-run-coach/blob/main/engine/PLAN.md" target="_blank" rel="noopener">plan format</a>`));
+    col.append(s);
+  }
+  const list = ST.sessions || [];
+  const ci = ST.current ? list.findIndex(x => x.id === ST.current.id) : -1;
+  const si = ci < 0 ? -1 : Math.max(0, Math.min(list.length - 1, ci + sessOff));
+  const cur = sessOff === 0 || si < 0 ? ST.current : list[si];
+  if (cur) {
+    const rest = cur.type === "rest", verdict = cur.result ? cur.result.verdict : (cur.verdict || "");
+    const [s, b, hd] = section("session", "", rest ? "" : statusLabel(cur.status) + (cur.moved ? " · moved" : ""));
+    $(".ttl", hd).innerHTML = `${esc(dayLabel(cur.date))} <span class="nav ${si > 0 ? "" : "off"}" id="sPrev" title="Previous day">‹</span><span class="nav ${si >= 0 && si < list.length - 1 ? "" : "off"}" id="sNext" title="Next day">›</span>`
+      + (sessOff ? ` <span class="nav" id="sToday" title="Back">today</span>` : "");
+    const go = n => { if (ci < 0) return; const j = Math.max(0, Math.min(list.length - 1, ci + sessOff + n)); sessOff = j - ci; renderAll(); };
+    $("#sPrev", hd).onclick = () => go(-1); $("#sNext", hd).onclick = () => go(1);
+    if (sessOff) $("#sToday", hd).onclick = () => { sessOff = 0; renderAll(); };
+    s.classList.add("hero");
+    b.append(h("div", {}, `<div class="htitle">${esc(rest ? "Rest day" : cur.title)}</div>
       <div class="dim small">${esc([cur.id, "Week " + cur.week + " " + cur.phase, cur.garmin ? "Watch: " + cur.garmin : ""].filter(Boolean).join("  ·  "))}</div>`));
-    if (ST.today_rest) b.append(h("div", { class: "dim" }, esc(ST.rest_note || "Rest day")));
-    b.append(h("ul", { class: "steps" }, cur.steps.map(x => `<li>${esc(x)}</li>`).join("")));
-    if (cur.result) b.append(h("div", { style: `color:${stateColor(cur.result.status)}` }, esc(cur.result.verdict)));
+    if (rest || (sessOff === 0 && ST.today_rest)) b.append(h("div", { class: "dim" }, esc((rest ? "" : "Today: ") + (ST.rest_note || "Rest day"))));
+    if (!rest) b.append(h("ul", { class: "steps" }, cur.steps.map(x => `<li>${esc(x)}</li>`).join("")));
+    if (verdict) b.append(h("div", { style: `color:${stateColor(cur.result ? cur.result.status : cur.status)}` }, esc(verdict)));
     b.append(h("div", { class: "dim small" }, "Mark it from the bar panel or with <code>run-coach mark done|skip|move</code>"));
     col.append(s);
   }
@@ -160,8 +186,8 @@ function renderPlan() {
   const weeks = ST.weeks || (ST.week ? [ST.week] : []);
   if (weeks.length) {
     const i = weekIdx < 0 || weekIdx >= weeks.length ? weeks.length - 1 : weekIdx, w = weeks[i];
-    const [s, b, hd] = section("week", "", `${w.km.toFixed(1)}/${w.target} km · ${w.done}/${w.planned} sessions`);
-    $(".ttl", hd).innerHTML = `<span class="nav ${i > 0 ? "" : "off"}" id="wPrev">‹</span> Week ${w.number}${w.phase ? " · " + esc(w.phase) : ""} <span class="nav ${i < weeks.length - 1 ? "" : "off"}" id="wNext">›</span>`;
+    const [s, b, hd] = section("week", "", w.target ? `${w.km.toFixed(1)}/${w.target} km · ${w.done}/${w.planned} sessions` : `${w.km.toFixed(1)} km`);
+    $(".ttl", hd).innerHTML = `<span class="nav ${i > 0 ? "" : "off"}" id="wPrev">‹</span> ${esc(w.label || "Week " + w.number)}${w.phase ? " · " + esc(w.phase) : ""} <span class="nav ${i < weeks.length - 1 ? "" : "off"}" id="wNext">›</span>`;
     $("#wPrev", hd).onclick = () => { if (i > 0) { weekIdx = i - 1; selDate = ""; renderAll(); } };
     $("#wNext", hd).onclick = () => { if (i < weeks.length - 1) { weekIdx = i + 1; selDate = ""; renderAll(); } };
     b.append(h("div", { class: "progress" }, `<div style="width:${(w.pct * 100).toFixed(1)}%"></div>`));
@@ -181,7 +207,7 @@ function renderPlan() {
     // weekly volume over the whole plan
     const vol = ST.volume || [];
     if (vol.length) {
-      b.append(h("div", { class: "dim small" }, "Weekly km · plan to race day"));
+      b.append(h("div", { class: "dim small" }, P.exists && !P.errors ? "Weekly km · plan to race day" : "Weekly km · last 12 weeks"));
       chartBox(b, 110, (box, W, H) => {
         const s2 = svg(W, H); box.append(s2);
         const max = Math.max(1, ...vol.map(v => Math.max(v.target, v.km || 0))), slot = W / vol.length, gap = 2;
@@ -190,7 +216,7 @@ function renderPlan() {
           sv("rect", { x, y: H - th, width: bw, height: th, rx: Math.min(4, bw / 2), fill: "none", stroke: css("--fg"), "stroke-opacity": shown ? .55 : .22 }, s2);
           if (past && v.km > 0) { const ah = (H - 4) * v.km / max; sv("rect", { x, y: H - ah, width: bw, height: ah, rx: Math.min(4, bw / 2), fill: css("--accent"), "fill-opacity": shown ? 1 : .6 }, s2); }
           const hit = sv("rect", { x: k * slot, y: 0, width: slot, height: H, fill: "transparent", style: past ? "cursor:pointer" : "" }, s2);
-          tipOn(hit, `Week ${v.week}${v.phase ? " · " + v.phase : ""}  (${shortDate(v.monday)})\n${past ? v.km.toFixed(1) + " of " + v.target + " km planned" : v.target + " km planned"}`);
+          tipOn(hit, v.label ? `${v.label}\n${(v.km || 0).toFixed(1)} km` : `Week ${v.week}${v.phase ? " · " + v.phase : ""}  (${shortDate(v.monday)})\n${past ? v.km.toFixed(1) + " of " + v.target + " km planned" : v.target + " km planned"}`);
           if (past) hit.addEventListener("click", () => { const j = weeks.findIndex(x => x.number === v.week); if (j >= 0) { weekIdx = j; selDate = ""; renderAll(); } });
         });
       });
@@ -226,7 +252,7 @@ function renderRun() {
   }
   b.append(stats([["Distance", r.distance_km.toFixed(2) + " km"], ["Time", r.duration], ["Pace", r.pace + " /km"],
     ["Avg HR", (r.avg_hr || "-") + (r.max_hr ? "  (max " + r.max_hr + ")" : "")],
-    ["Above cap", r.pct_above_cap != null ? r.pct_above_cap + "% > " + r.cap : "-"], ["Vertical ratio", r.vr ? r.vr + "%" : "-"],
+    ...(r.cap ? [["Above cap", r.pct_above_cap + "% > " + r.cap]] : []), ["Vertical ratio", r.vr ? r.vr + "%" : "-"],
     ["Cadence", r.cadence ? r.cadence + " spm" : "-"], ["Ground contact", r.gct ? r.gct + " ms" : "-"]]));
   b.append(h("div", { style: `color:${stateColor(r.status)}` }, esc(r.verdict + (r.hr_after_10 != null ? "  ·  HR after 10 min " + r.hr_after_10 : ""))
     + (r.notes && r.notes.length ? "<br>" + r.notes.map(esc).join("<br>") : "")));
@@ -327,7 +353,7 @@ function renderFit() {
     const [s, b] = section("fitness", "Garmin", f.fetched ? "fitness · updated " + ago(f.fetched) : "fitness");
     const rows = [];
     if (f.vo2max) rows.push(["VO2 max", String(f.vo2max), "Running VO2 max, updated " + shortDate(f.vo2max_date)]);
-    if (f.predictions) rows.push(["Marathon pred.", hms(f.predictions.marathon), `5K ${hms(f.predictions.k5)} · 10K ${hms(f.predictions.k10)} · Half ${hms(f.predictions.half)}\nGoal ${hms(f.goal_s)}: ${hms(Math.abs(f.predictions.marathon - f.goal_s))} ${f.predictions.marathon > f.goal_s ? "to go" : "ahead"}`]);
+    if (f.predictions) rows.push(["Marathon pred.", hms(f.predictions.marathon), `5K ${hms(f.predictions.k5)} · 10K ${hms(f.predictions.k10)} · Half ${hms(f.predictions.half)}` + (f.goal_s ? `\nGoal ${hms(f.goal_s)}: ${hms(Math.abs(f.predictions.marathon - f.goal_s))} ${f.predictions.marathon > f.goal_s ? "to go" : "ahead"}` : "")]);
     if (f.readiness) rows.push(["Readiness", f.readiness.score + " " + f.readiness.level, `Sleep score ${f.readiness.sleep} · recovery left ${f.readiness.recovery_h} h`]);
     if (f.endurance) rows.push(["Endurance", f.endurance.score + " " + f.endurance.class, f.endurance.next ? (f.endurance.next - f.endurance.score) + " points to the next level" : ""]);
     if (f.fitness_age) rows.push(["Fitness age", String(f.fitness_age), "Your age: " + f.age]);
@@ -340,10 +366,11 @@ function renderFit() {
       tipOn(e, `Last 4 weeks of training load\n${row("Low aerobic (easy)", bl.low)}\n${row("High aerobic (tempo/threshold)", bl.high)}\n${row("Anaerobic", bl.anaerobic)}` + (f.acwr ? `\nAcute/chronic ratio ${f.acwr} (${f.acwr_status})` : ""));
       b.append(e); }
     if (f.trend && f.trend.length > 1) lineChart(b, "Predicted marathon", [{ pts: f.trend.map(t => [ms(t[0]), t[1]]), color: css("--accent"), label: l => hms(l[1]) }],
-      { invert: true, yPad: 300, yRef: f.goal_s, yRefLabel: "goal " + hms(Math.round(f.goal_s / 60) * 60).replace(/:00$/, ""), xMax: ms(f.race_date),
-        vMark: ms(f.plan_start), endDot: true, labelAtEnd: true, height: 120,
-        axis: [[ms(f.trend[0][0]), shortDate(f.trend[0][0]), "start"], [ms(f.plan_start), "plan start"], [ms(f.race_date), "race day", "end"]],
-        tip: k => `${shortDate(f.trend[k][0])}\nMarathon ${hms(f.trend[k][1])}  (${hms(Math.abs(f.trend[k][1] - f.goal_s))} ${f.trend[k][1] > f.goal_s ? "slower" : "faster"} than goal)` });
+      { invert: true, yPad: 300, yRef: f.goal_s || null, yRefLabel: f.goal_s ? "goal " + hms(Math.round(f.goal_s / 60) * 60).replace(/:00$/, "") : "", xMax: ms(f.race_date),
+        vMark: f.plan_start ? ms(f.plan_start) : null, endDot: true, labelAtEnd: true, height: 120,
+        axis: [[ms(f.trend[0][0]), shortDate(f.trend[0][0]), "start"]].concat(f.plan_start ? [[ms(f.plan_start), "plan start"]] : [])
+          .concat([[ms(f.race_date), f.goal_s ? "race day" : "today", "end"]]),
+        tip: k => `${shortDate(f.trend[k][0])}\nMarathon ${hms(f.trend[k][1])}` + (f.goal_s ? `  (${hms(Math.abs(f.trend[k][1] - f.goal_s))} ${f.trend[k][1] > f.goal_s ? "slower" : "faster"} than goal)` : "") });
     col.append(s);
   }
   const sd = ST.strava;

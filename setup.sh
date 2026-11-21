@@ -66,13 +66,9 @@ omarchy bar put "$ID" --section centerEnd --index 0 >/dev/null 2>&1 || true
 
 "$HOME/.local/bin/run-coach" status >/dev/null || true
 say "Run Coach is installed."
-if [[ ! -f $CONF/plan.json ]]; then
-  echo
-  echo "Next: create your plan from the example, moved to your race date:"
-  echo "  run-coach init-plan --race-date 2027-04-18 --race-name \"My Marathon\" --short \"MyM\" --target 3:29:59"
-fi
 echo
-echo "Optional, each in a terminal:"
+echo "Next, each in a terminal (or from the panel's buttons):"
 echo "  run-coach garmin-auth    # download your runs from Garmin Connect"
 echo "  run-coach strava-auth    # Strava: see README for the 2-minute API app setup"
+[[ -f $CONF/plan.json ]] || echo "  run-coach new-plan       # optional: a training plan for your race"
 echo "Coach notes turn on by themselves if Claude Code (the 'claude' command) is installed."

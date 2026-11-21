@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Run Coach: keeps a running plan in the Omarchy bar.
 
-Reads plan.json, the Garmin activity FIT files and (optionally) Strava, judges
-each run against its planned session and writes status.json, which the bar
+Reads the Garmin activity FIT files and/or Strava and, when there is one,
+plan.json; judges each run against its planned session and writes status.json, which the bar
 widget (okox.run-coach) renders.
 
 Subcommands:
@@ -11,7 +11,10 @@ Subcommands:
   waybar               print {"text","tooltip","class","percentage"}
   detail               print the current session and the last run as text
   mark done|skip|move|clear [SESSION_ID] [--km N]
-  init-plan --race-date D  create ~/.config/run-coach/plan.json from the example
+  new-plan             create a plan: Claude writes or converts one, or the built-in example
+  edit-plan            edit the plan in $EDITOR, checked before it's saved
+  check-plan [FILE]    check a plan file
+  init-plan --race-date D  the built-in example, moved to D (no questions)
   dashboard [--open|--serve]  the full panel as a web page (any desktop, or your phone)
   install-timer        systemd user timer that refreshes every 15 min (non-Omarchy installs)
   km DATE DELTA        add DELTA km to DATE (late watch start, treadmill...)
@@ -28,6 +31,7 @@ import json
 import math
 import os
 import re
+import shutil
 import sys
 import tempfile
 import threading
@@ -89,7 +93,7 @@ GLYPH = {
     "race": "\U000F023C",     # md-flag-checkered
     "setup": "\U000F070E",
 }
-FIT_VERSION = 2  # bump to re-decode cached FIT files after a decoder change
+FIT_VERSION = 3  # bump to re-decode cached FIT files after a decoder change
 RUN_SPORTS = {"running", "Run", "TrailRun", "VirtualRun"}
 STRAVA_API = "https://www.strava.com/api/v3"
 STRAVA_VERSION = 2  # bump to re-fetch run detail after adding fields
@@ -214,7 +218,161 @@ def plan_steps(steps_text):
 
 # ---------------------------------------------------------------- plan
 
+PLAN_TYPES = {"easy", "long", "key", "test", "rest", "race"}
+
+
+def check_plan(raw):
+    """Everything wrong with a plan, as sentences a person can act on."""
+    errs = []
+    if not isinstance(raw, dict):
+        return ["the file is not a JSON object"]
+    g = raw.get("goal")
+    if not isinstance(g, dict):
+        errs.append('"goal" is missing')
+    else:
+        for k in ("race", "date", "target_time"):
+            if not g.get(k):
+                errs.append(f'goal.{k} is missing')
+        try:
+            d(g.get("date", ""))
+        except ValueError:
+            errs.append(f'goal.date "{g.get("date")}" is not YYYY-MM-DD')
+        if g.get("target_time") and not re.fullmatch(r"\d+:\d\d:\d\d", str(g["target_time"])):
+            errs.append(f'goal.target_time "{g["target_time"]}" is not H:MM:SS')
+    z = raw.get("zones_hr")
+    if not isinstance(z, dict):
+        errs.append('"zones_hr" is missing')
+    else:
+        for k, _ in ZONE_ORDER:
+            v = z.get(k)
+            if not (isinstance(v, list) and len(v) == 2 and all(isinstance(x, (int, float)) for x in v) and v[0] <= v[1]):
+                errs.append(f'zones_hr.{k} must be [low, high] in bpm')
+    if not isinstance(raw.get("weekly_km_target"), dict):
+        errs.append('"weekly_km_target" is missing (e.g. {"0": 30, "1": 34})')
+    ss = raw.get("sessions")
+    if not isinstance(ss, list) or not ss:
+        errs.append('"sessions" is missing or empty')
+        ss = []
+    ids = set()
+    for i, x in enumerate(ss):
+        where = f'session {i + 1}' + (f' ({x.get("id")})' if isinstance(x, dict) and x.get("id") else "")
+        if not isinstance(x, dict):
+            errs.append(f"{where}: not an object")
+            continue
+        for k in ("date", "id", "title", "type"):
+            if not x.get(k):
+                errs.append(f"{where}: {k} is missing")
+        try:
+            d(x.get("date", ""))
+        except ValueError:
+            errs.append(f'{where}: date "{x.get("date")}" is not YYYY-MM-DD')
+        if x.get("type") and x["type"] not in PLAN_TYPES:
+            errs.append(f'{where}: type "{x["type"]}" must be one of {", ".join(sorted(PLAN_TYPES))}')
+        if x.get("id") in ids:
+            errs.append(f'{where}: id "{x["id"]}" is used twice')
+        ids.add(x.get("id"))
+        if not isinstance(x.get("week", 0), int):
+            errs.append(f"{where}: week must be a number")
+        if x.get("type") in ("key", "test") and x.get("steps"):
+            try:
+                plan_steps(x["steps"])
+            except Exception as e:
+                errs.append(f"{where}: steps can't be read ({e})")
+    return errs[:30]
+
+
+def watch_zones(state):
+    """HR zones without a plan: the watch's own (from the latest FIT file),
+    else Garmin's lactate threshold, else the highest HR seen. Returns
+    (bands, easy_cap, recovery_cap, where-from)."""
+    acts = sorted((c["activity"] for c in state.get("fit", {}).values()
+                   if c.get("activity") and (c["activity"].get("hr_zones") or {}).get("bounds")),
+                  key=lambda a: a["start_utc"])
+    if acts:
+        b = acts[-1]["hr_zones"]["bounds"]
+        src = "your watch's HR zones"
+    else:
+        lt = ((state.get("fitness") or {}).get("latest") or {}).get("lt_hr")
+        if lt:
+            b = [round(lt * f) for f in (0.65, 0.81, 0.90, 0.95, 1.0)] + [round(lt * 1.1)]
+            src = f"your lactate threshold ({lt} bpm)"
+        else:
+            hrs = [c["activity"].get("max_hr") or 0 for c in state.get("fit", {}).values() if c.get("activity")]
+            hrs += [a.get("max_hr") or 0 for a in state.get("strava", {}).get("activities", {}).values()]
+            mx = max(hrs + [0]) or 190
+            b = [round(mx * f) for f in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)]
+            src = f"your highest HR seen ({mx} bpm)"
+    b = sorted(int(x) for x in b if x)[-6:]
+    while len(b) < 6:
+        b.append(b[-1] + 10 if b else 200)
+    bands = []
+    for i in range(5):
+        lo = 0 if i == 0 else b[i] + 1
+        hi = b[i + 1] if i < 4 else 999
+        label = f"<{hi + 1}" if i == 0 else (f"{lo}+" if i == 4 else f"{lo}-{hi}")
+        bands.append({"key": f"z{i + 1}", "name": f"Zone {i + 1}", "lo": lo, "hi": hi, "label": label})
+    return bands, b[2], b[1], src
+
+
+def zones_from_lthr(lthr, max_hr=None):
+    """Six plan zones from a lactate-threshold HR (the usual %LTHR bands)."""
+    def z(a, b):
+        return [round(lthr * a), round(lthr * b)]
+    top = max(max_hr or 0, round(lthr * 1.12))
+    return {"recovery": z(0.81, 0.89), "easy": z(0.86, 0.92), "steady": z(0.91, 0.93),
+            "threshold": z(0.94, 0.99), "tempo_vo2": z(1.0, 1.05), "interval": [round(lthr * 1.06), top]}
+
+
+def lthr_guess(state):
+    acts = sorted((c["activity"] for c in state.get("fit", {}).values()
+                   if c.get("activity") and (c["activity"].get("hr_zones") or {}).get("lthr")),
+                  key=lambda a: a["start_utc"])
+    if acts:
+        z = acts[-1]["hr_zones"]
+        return z["lthr"], z.get("max"), "your watch"
+    lt = ((state.get("fitness") or {}).get("latest") or {}).get("lt_hr")
+    if lt:
+        return lt, None, "Garmin Connect"
+    return None, None, None
+
+
+class NoPlan:
+    """Stands in for a plan when there is none: no sessions, no race, the
+    watch's zones, and the last 12 weeks as the time window."""
+    has_plan = False
+
+    def __init__(self, state):
+        self.raw = {}
+        self.goal = None
+        self.race_date = None
+        self.sessions = []
+        self.km_target = {}
+        self.short = ""
+        self.bands, easy_cap, rec_cap, self.zones_source = watch_zones(state)
+        self.zones = {"easy": [0, easy_cap], "recovery": [0, rec_cap]}
+        today = now().date()
+        self.week0_monday = today - dt.timedelta(days=today.weekday()) - dt.timedelta(weeks=11)
+        self.start = self.week0_monday
+        self.last_week = 10 ** 6
+        self.bench = {"hr": [0, 0], "km": 0, "start_km": 0, "baseline": {}}
+
+    def on(self, date):
+        return []
+
+    def by_id(self, sid):
+        return None
+
+    def week_of(self, date):
+        return (date - self.week0_monday).days // 7
+
+    def cap_for(self, s):
+        return self.zones["easy"][1]
+
+
 class Plan:
+    has_plan = True
+    zones_source = "your plan"
+
     def __init__(self, raw, overrides):
         self.raw = raw
         self.goal = raw["goal"]
@@ -349,6 +507,11 @@ def decode_fit(path):
         "gct_ms": num(ses.get("avg_stance_time"), 0),
         "step_m": num((ses.get("avg_step_length") or 0) / 1000, 2) or None,
     }
+    for z in msgs.get("time_in_zone_mesgs") or []:
+        if str(z.get("reference_mesg")) == "session" and z.get("hr_zone_high_boundary"):
+            act["hr_zones"] = {"bounds": list(z["hr_zone_high_boundary"]), "lthr": z.get("threshold_heart_rate"),
+                               "max": z.get("max_heart_rate"), "rest": z.get("resting_heart_rate"),
+                               "calc": str(z.get("hr_calc_type") or "")}
     if act["sport"] != "running":
         return act
     t0 = start.timestamp()
@@ -863,6 +1026,11 @@ def analyse(session, runs, plan):
                       "pace": pace_str(L["time"] / (L["dist"] / 1000)) if L["dist"] > 50 else "-",
                       "hr": L.get("hr"), "step": (L.get("step") or {}).get("name")}
                      for i, L in enumerate(main.get("laps") or []) if L.get("dist", 0) > 5]
+    if not plan.has_plan:  # nothing to judge against: describe it
+        z = max(zones or [], key=lambda x: x["secs"], default=None)
+        out["verdict"] = f"Mostly {z['name']} ({z['pct']}%)" if z and z["secs"] else (
+            f"Avg HR {out['avg_hr']}" if out["avg_hr"] else "Done")
+        return out
     if not session:  # unplanned: hold it to the easy cap
         session = {"type": "easy", "title": "Unplanned", "steps": "", "flat_steps": []}
     kind = session["type"]
@@ -978,14 +1146,16 @@ def build_status(state, plan, problems):
                 run["status"] = "done"
                 run["session"] = "Before the plan"
             status = main["status"] if main else "none"
-            if run and (not main or main["type"] == "rest"):
+            if run and not plan.has_plan:
+                status = run["status"]
+            elif run and (not main or main["type"] == "rest"):
                 status = "extra"  # a run nobody planned
             elif km and status == "none":
                 status = "done"
             days.append({
                 "date": iso, "dow": dow(day), "day": day.day, "today": day == today, "future": day > today,
                 "id": main["id"] if main else "",
-                "title": main["title"] if main else (("Before plan" if day < plan.start else "Extra run") if run else ""),
+                "title": main["title"] if main else (("Run" if not plan.has_plan else "Before plan" if day < plan.start else "Extra run") if run else ""),
                 "type": main["type"] if main else "none", "status": status, "km": round(km, 1),
                 "steps": [x.strip() for x in (main.get("steps") or "").split(" | ") if x.strip()] if main else [],
                 "garmin": main.get("garmin_workout") if main else None,
@@ -1002,7 +1172,8 @@ def build_status(state, plan, problems):
         pl = [s for s in plan.sessions if monday.isoformat() <= s["date"] <= sunday.isoformat() and s["type"] != "rest"]
         dn = sum(1 for s in pl if s["status"] in ("done", "warn"))
         phase = next((s["phase"] for s in pl), "")
-        return {"number": n_, "phase": phase, "km": round(km_, 1), "target": tgt,
+        label = f"Week {n_}" if plan.has_plan else f"Week of {monday.day} {monday.strftime('%b')}"
+        return {"number": n_, "label": label, "phase": phase, "km": round(km_, 1), "target": tgt,
                 "pct": round(min(1.0, km_ / tgt), 3) if tgt else 0, "done": dn, "planned": len(pl),
                 "days": week_days(monday), "monday": monday.isoformat(), "current": monday == mon}
 
@@ -1024,8 +1195,18 @@ def build_status(state, plan, problems):
 
     # Bar state.
     cls, text = "planned", ""
+    if not plan.has_plan:
+        lr_ = runs[-1] if runs else None
+        if lr_ and lr_["date"] == today.isoformat():
+            cls, text = "done", f"Today {lr_['distance_m'] / 1000:.1f} km" + (f" · {pace_str(lr_['pace'])}/km" if lr_.get("pace") else "")
+        elif lr_:
+            cls, text = "rest", f"Last run {dow(d(lr_['date']))} {lr_['distance_m'] / 1000:.1f} km"
+        else:
+            cls, text = "rest", "Run Coach · no runs yet"
     recent_missed = [s for s in plan.sessions if s["status"] == "missed" and 0 < (today - d(s["date"])).days <= 2]
-    if today == plan.race_date:
+    if not plan.has_plan:
+        pass
+    elif today == plan.race_date:
         cls, text = "race", f"Race day · {plan.goal['target_time']} · {plan.goal.get('goal_pace_watch') or plan.goal.get('goal_pace', '')}"
     elif today_s and today_s["status"] in ("done", "warn"):
         a = results.get(today_s["id"])
@@ -1058,7 +1239,7 @@ def build_status(state, plan, problems):
         last_run = results.get(sess["id"]) if sess and sess["id"] in results else analyse(sess, by_date[lr["date"]], plan)
         if last_run is not None:
             last_run = dict(last_run, note=(state.get("notes") or {}).get(lr["date"], {}).get("text"))
-            last_run["session"] = f"{sess['id']} {sess['title']}" if sess else "Unplanned"
+            last_run["session"] = f"{sess['id']} {sess['title']}" if sess else ("Unplanned" if plan.has_plan else "Run")
 
     # Benchmarks.
     base = plan.bench["baseline"]
@@ -1086,7 +1267,7 @@ def build_status(state, plan, problems):
         for cd in c.get("dates", [c["date"]] if c.get("date") else []):
             cps.append({"date": cd, "test": c["test"], "target": c["on_track"]})
     cps.sort(key=lambda c: c["date"])
-    next_cp = next((c for c in cps if c["date"] >= today.isoformat()), None)
+    next_cp = next((c for c in cps if c["date"] >= today.isoformat()), None) if plan.has_plan else None
     if next_cp:
         next_cp["days"] = (d(next_cp["date"]) - today).days
 
@@ -1107,8 +1288,12 @@ def build_status(state, plan, problems):
     if current:
         tooltip_bits.append(f"{current['id']} {current['title']}")
     w = this_week
-    tooltip_bits.append(f"Week {w['number']}: {w['km']:.1f}/{w['target']} km · {w['done']}/{w['planned']} sessions")
-    tooltip_bits.append(f"{(plan.race_date - today).days} days to {plan.short}")
+    if plan.has_plan:
+        tooltip_bits.append(f"Week {w['number']}: {w['km']:.1f}/{w['target']} km · {w['done']}/{w['planned']} sessions")
+        tooltip_bits.append(f"{(plan.race_date - today).days} days to {plan.short}")
+    else:
+        tooltip_bits.append(f"This week: {w['km']:.1f} km")
+        tooltip_bits.append("No training plan yet: open the panel to add one")
     status = {
         "version": 1,
         "generated": n.isoformat(timespec="seconds"),
@@ -1120,6 +1305,11 @@ def build_status(state, plan, problems):
         "today_rest": bool(today_s and today_s["type"] == "rest"),
         "next": sess_out(nxt),
         "upcoming": [sess_out(s) for s in upcoming[:6]],
+        # Every day of the plan, for browsing sessions from the panel.
+        "sessions": [dict(sess_out(s), result=None, verdict=(results.get(s["id"]) or {}).get("verdict", ""))
+                     for s in plan.sessions],
+        "plan": {"exists": plan.has_plan, "path": str(PLAN), "zones_source": plan.zones_source,
+                 "can_ai": bool(claude_bin())},
         "week": dict(this_week, phase=this_week["phase"] or (current or {}).get("phase", "")),
         "weeks": weeks,
         # Whole plan, for the weekly-volume chart: target for every week,
@@ -1127,17 +1317,19 @@ def build_status(state, plan, problems):
         "volume": [{"week": n_, "target": t_, "km": next((w["km"] for w in weeks if w["number"] == n_), None),
                     "monday": (plan.week0_monday + dt.timedelta(days=7 * n_)).isoformat(),
                     "phase": next((x["phase"] for x in plan.sessions if x["week"] == n_), "")}
-                   for n_, t_ in sorted(plan.km_target.items())],
+                   for n_, t_ in sorted(plan.km_target.items())] if plan.has_plan else
+                  [{"week": w_["number"], "target": 0, "km": w_["km"], "monday": w_["monday"], "phase": "",
+                    "label": w_["label"]} for w_ in weeks],
         "fitness": fitness_out(state, plan),
         "strava": {"connected": TOKEN.exists(), "fitness": strava_fitness(state),
-                   "predictions": strava_predictions(runs), "goal_s": fitness_goal_s(plan),
+                   "predictions": strava_predictions(runs), "goal_s": fitness_goal_s(plan) if plan.has_plan else None,
                    "notes_error": state.get("notes_error")} if TOKEN.exists() else None,
         "hr_zones": [{k: b[k] for k in ("key", "name", "label")} for b in plan.bands],
         "last_run": last_run,
         "benchmarks": benches,
         "baseline": {"pace": base.get("pace"), "vr": base.get("vertical_ratio_pct"), "cadence": base.get("cadence_spm"),
                      "gct": base.get("gct_ms"), "vo_cm": base.get("vertical_oscillation_cm")},
-        "race": {"name": plan.goal["race"], "short": plan.short, "date": plan.goal["date"], "days": (plan.race_date - today).days,
+        "race": None if not plan.has_plan else {"name": plan.goal["race"], "short": plan.short, "date": plan.goal["date"], "days": (plan.race_date - today).days,
                  "target": plan.goal["target_time"], "pace": plan.goal.get("goal_pace_watch") or plan.goal.get("goal_pace", "")},
         "next_checkpoint": next_cp,
         "sources": {
@@ -1166,10 +1358,12 @@ def fitness_out(state, plan):
     f = state.get("fitness") or {}
     if not f.get("latest"):
         return None
-    goal = plan.goal["target_time"].split(":")
-    goal_s = int(goal[0]) * 3600 + int(goal[1]) * 60 + int(goal[2])
     hist = f.get("predictions") or {}
-    return dict(f["latest"], goal_s=goal_s, race_date=plan.goal["date"], plan_start=plan.start.isoformat(),
+    if plan.has_plan:
+        goal_s, race_date, start = fitness_goal_s(plan), plan.goal["date"], plan.start.isoformat()
+    else:
+        goal_s, race_date, start = None, now().date().isoformat(), None
+    return dict(f["latest"], goal_s=goal_s, race_date=race_date, plan_start=start,
                 trend=[[k, v["m"]] for k, v in sorted(hist.items())],
                 fetched=dt.datetime.fromtimestamp(f["fetched"], tz()).isoformat(timespec="minutes") if f.get("fetched") else None)
 
@@ -1264,8 +1458,9 @@ def write_notes(state, plan, st, limit=3):
         for k in ("strava", "name", "source"):
             r.pop(k, None)
         brief = {
-            "goal": f"{plan.goal['race']} on {plan.goal['date']} in {plan.goal['target_time']}",
-            "plan_week": st["week"]["number"] if dd in st["week"]["days"] else None,
+            "goal": f"{plan.goal['race']} on {plan.goal['date']} in {plan.goal['target_time']}" if plan.has_plan
+                    else "no training plan: comment on the run itself",
+            "plan_week": st["week"]["number"] if plan.has_plan and dd in st["week"]["days"] else None,
             "hr_zones_bpm": {b["name"]: b["label"] for b in plan.bands}, "easy_cap_bpm": plan.zones["easy"][1],
             "date": dd["date"], "planned_session": {"id": dd.get("id"), "title": dd.get("title"), "type": dd.get("type"),
                                                      "steps": dd.get("steps")},
@@ -1428,15 +1623,29 @@ def setup_error(reason):
             "problems": [reason]}
 
 
+def load_plan(state):
+    """(plan, problems). No plan file is fine (NoPlan); a broken one is
+    (None, [what's wrong])."""
+    if not PLAN.exists():
+        return NoPlan(state), []
+    try:
+        raw = json.loads(PLAN.read_text())
+    except (OSError, ValueError) as e:
+        return None, [f"plan.json can't be read: {e}", "Fix it with `run-coach edit-plan`"]
+    errs = check_plan(raw)
+    if errs:
+        return None, [f"plan.json has {len(errs)} problem(s): " + errs[0], *errs[1:], "Fix it with `run-coach edit-plan`"]
+    return Plan(raw, state.get("overrides", {})), []
+
+
 def rebuild(do_scan=False, force=False):
     state = load_json(STATE, {})
-    raw = load_json(PLAN, None)
-    if not raw or "sessions" not in raw:
-        st = setup_error(f"No plan yet: run `run-coach init-plan --race-date YYYY-MM-DD` (or copy one to {PLAN})")
+    plan, problems = load_plan(state)
+    if plan is None:
+        st = setup_error(problems[0])
+        st["plan"] = {"exists": True, "path": str(PLAN), "errors": problems, "can_ai": bool(claude_bin())}
         save_json(STATUS, st)
         return st
-    plan = Plan(raw, state.get("overrides", {}))
-    problems = []
     if do_scan:
         for err in (scan_garmin(state, plan.start, force), scan_fit(state, plan.start), scan_strava(state, plan.start)):
             if err:
@@ -1466,8 +1675,9 @@ def rebuild(do_scan=False, force=False):
 
 def cmd_mark(args):
     state = load_json(STATE, {})
-    raw = load_json(PLAN, None)
-    plan = Plan(raw, state.get("overrides", {}))
+    plan, problems = load_plan(state)
+    if plan is None or not plan.has_plan:
+        sys.exit(problems[0] if problems else "No plan yet: run `run-coach new-plan`")
     sid = args.session
     if not sid:
         st = rebuild()
@@ -1505,18 +1715,67 @@ def cmd_km(args):
     print(f"{args.date}: {adj.get(args.date, 0):+} km")
 
 
-def cmd_init_plan(args):
-    """Start from a plan file (the bundled example by default), moved so its
-    race lands on --race-date."""
-    src = Path(args.source) if args.source else asset("example-plan.json")
-    if not src:
-        sys.exit("bundled example plan not found; pass --source FILE")
-    if PLAN.exists() and not args.force:
-        sys.exit(f"{PLAN} already exists (use --force to replace it)")
-    raw = load_json(src, None)
-    if not raw or "sessions" not in raw:
-        sys.exit(f"not a plan: {src}")
-    shift = (d(args.race_date) - d(raw["goal"]["date"])).days
+# ---------------------------------------------------------------- plans
+
+PLAN_SYSTEM = (
+    "You write running training plans for Run Coach as one JSON object. Output only the JSON: no prose, "
+    "no markdown, no code fences. Follow the format below exactly. One session per calendar day from the "
+    "start date to race day inclusive (rest days are sessions with type \"rest\" and empty steps), the race "
+    "itself is the last session with type \"race\". Ids are W<week, 2 digits>-<day 1-7>. Weeks start on "
+    "Monday at week 0. Use the athlete's HR zones exactly as given in zones_hr, and take every HR target in "
+    "the steps from those zones (the numbers in the format examples are only examples). Give paces as m:ss per km, "
+    "set from the goal time. "
+    "Build volume gradually (about 10% a week at most, a lighter week every 3-4 weeks) and taper for the "
+    "last 2-3 weeks. Key and test sessions must use the steps syntax so laps can be matched.\n\n")
+
+
+def need_tty(what):
+    if not sys.stdin.isatty():
+        sys.exit(f"{what} asks you questions: run it in a terminal window.")
+
+
+def ask(prompt, default=None, check=None):
+    while True:
+        try:
+            v = input(f"{prompt}" + (f" [{default}]" if default not in (None, "") else "") + ": ").strip()
+        except EOFError:
+            sys.exit(1)
+        v = v or ("" if default is None else str(default))
+        err = check(v) if check else None
+        if not err:
+            return v
+        print(f"  {err}")
+
+
+def choose(prompt, options):
+    """options: [(key, label)], returns the key."""
+    print(prompt)
+    for i, (_, label) in enumerate(options, 1):
+        print(f"  {i}) {label}")
+    n = ask("Choose", "1", lambda v: None if v.isdigit() and 1 <= int(v) <= len(options) else "type a number from the list")
+    return options[int(n) - 1][0]
+
+
+def _date_ok(v):
+    try:
+        return None if d(v) > now().date() else "that date is not in the future"
+    except ValueError:
+        return "use YYYY-MM-DD"
+
+
+def _time_ok(v):
+    return None if re.fullmatch(r"\d:\d\d:\d\d", v) else "use H:MM:SS, e.g. 3:29:59"
+
+
+def _hms(v):
+    h, m, s_ = map(int, v.split(":"))
+    return h * 3600 + m * 60 + s_
+
+
+def shift_plan(raw, race_date):
+    """Move every date so the plan's race lands on race_date (whole weeks
+    when possible, so weekdays stay put)."""
+    shift = (d(race_date) - d(raw["goal"]["date"])).days
 
     def mv(x):
         return (d(x) + dt.timedelta(days=shift)).isoformat()
@@ -1528,7 +1787,251 @@ def cmd_init_plan(args):
             c["date"] = mv(c["date"])
         if c.get("dates"):
             c["dates"] = [mv(x) for x in c["dates"]]
-    raw["goal"]["date"] = args.race_date
+    raw["goal"]["date"] = race_date
+    return shift
+
+
+def scale_paces(raw, ratio):
+    """Scale every m:ss pace in the steps and goal paces (a faster goal, faster paces)."""
+    def f(m):
+        sec = round((int(m.group(1)) * 60 + int(m.group(2))) * ratio)
+        return f"{sec // 60}:{sec % 60:02d}"
+    pat = re.compile(r"(?<![\d:])(\d{1,2}):([0-5]\d)(?![\d:])")
+    for s_ in raw["sessions"]:
+        if s_.get("steps"):
+            s_["steps"] = pat.sub(f, s_["steps"])
+    for k in ("goal_pace", "goal_pace_watch"):
+        if raw["goal"].get(k):
+            raw["goal"][k] = pat.sub(f, raw["goal"][k])
+
+
+def remap_hr(raw, zones):
+    """Move every HR number in the plan (steps, titles, benchmark) from the
+    plan's own zones onto new ones, mapping zone edge to zone edge."""
+    old = raw["zones_hr"]
+    pts = sorted({(o, n) for k in old for o, n in zip(old[k], zones[k])})
+
+    def f(x):
+        x = int(x)
+        if x <= pts[0][0]:
+            return x + pts[0][1] - pts[0][0]
+        if x >= pts[-1][0]:
+            return x + pts[-1][1] - pts[-1][0]
+        for (a, na), (b, nb) in zip(pts, pts[1:]):
+            if a <= x <= b:
+                return round(na + (nb - na) * (x - a) / (b - a)) if b > a else na
+        return x
+    pat = re.compile(r"(HR\s*(?:<=|≤|<|>)?\s*)(\d{2,3})(?:-(\d{2,3}))?")
+
+    def sub(m):
+        return m.group(1) + str(f(m.group(2))) + (f"-{f(m.group(3))}" if m.group(3) else "")
+    for s_ in raw["sessions"]:
+        for k in ("steps", "title"):
+            if s_.get(k):
+                s_[k] = pat.sub(sub, s_[k])
+    for c in raw.get("checkpoints", []):
+        for k in ("test", "on_track"):
+            if c.get(k):
+                c[k] = pat.sub(sub, c[k])
+    if raw.get("benchmark", {}).get("hr"):
+        raw["benchmark"]["hr"] = [f(x) for x in raw["benchmark"]["hr"]]
+    raw["zones_hr"] = zones
+
+
+def claude_plan(brief, source_text=None):
+    """Ask Claude Code for a plan; up to 2 corrections when it doesn't validate."""
+    import subprocess
+    fmt = asset("PLAN.md")
+    system = PLAN_SYSTEM + "FORMAT:\n" + (fmt.read_text() if fmt else "")
+    msg = json.dumps(brief, indent=1)
+    if source_text:
+        msg += "\n\nConvert this existing plan into the format (keep its sessions, fill the gaps sensibly):\n" + source_text[:60000]
+    for attempt in range(3):
+        print("  Claude is writing your plan (this can take a few minutes)…" if attempt == 0 else "  Fixing a few problems…",
+              flush=True)
+        try:
+            res = subprocess.run(
+                [claude_bin(), "-p", "--tools", "", "--no-session-persistence", "--strict-mcp-config",
+                 "--setting-sources", "", "--system-prompt", system, msg],
+                capture_output=True, text=True, timeout=900, cwd=tempfile.gettempdir())
+        except subprocess.TimeoutExpired:
+            print("  Claude took too long.")
+            return None
+        out = res.stdout.strip()
+        if res.returncode != 0 or not out:
+            print("  Claude Code failed: " + (res.stderr or out or "no output").strip()[:300])
+            return None
+        out = re.sub(r"^```(?:json)?\s*|\s*```$", "", out)
+        try:
+            raw = json.loads(out[out.find("{"): out.rfind("}") + 1])
+        except ValueError as e:
+            errs = [f"not valid JSON: {e}"]
+            raw = None
+        else:
+            raw.setdefault("goal", {}).update(brief["goal"])
+            raw["zones_hr"] = brief["zones_hr"]
+            errs = check_plan(raw)
+        if not errs:
+            return raw
+        msg = (json.dumps(brief, indent=1) + "\n\nYour previous plan had these problems, send the whole corrected JSON:\n- "
+               + "\n- ".join(errs) + ("\n\nPrevious plan:\n" + json.dumps(raw) if raw else ""))
+    print("  Claude's plan still had problems:\n  - " + "\n  - ".join(errs[:8]))
+    return None
+
+
+def save_plan(raw):
+    CONF_DIR.mkdir(parents=True, exist_ok=True)
+    if PLAN.exists():
+        bak = PLAN.with_name(f"plan.{now().strftime('%Y%m%d-%H%M%S')}.bak.json")
+        shutil.copy2(PLAN, bak)
+        print(f"Your previous plan is saved as {bak}")
+    save_json(PLAN, raw)
+
+
+def cmd_new_plan(args):
+    need_tty("new-plan")
+    state = load_json(STATE, {})
+    print("\033[1mNew training plan\033[0m\n"
+          "A plan is one session per day up to your race. Run Coach shows the day's session in the bar\n"
+          "and checks each run against it. You can change anything later with `run-coach edit-plan`.\n")
+    if PLAN.exists() and ask("You already have a plan. Replace it? (y/N)", "n").lower() != "y":
+        return
+    race = ask("Race name", "Marathon")
+    short = ask("Short name for the bar", race if len(race) <= 12 else race.split()[0])
+    distance = choose("Distance:", [("marathon", "Marathon"), ("half marathon", "Half marathon"), ("10 km", "10 km"),
+                                    ("5 km", "5 km"), ("other", "Other (you'll describe it)")])
+    if distance == "other":
+        distance = ask("Describe the race (distance, terrain)")
+    race_date = ask("Race date (YYYY-MM-DD)", check=_date_ok)
+    target = ask("Goal time (H:MM:SS)", check=_time_ok)
+
+    lthr, mx, src = lthr_guess(state)
+    if lthr:
+        print(f"\nYour lactate threshold heart rate is {lthr} bpm (from {src}). Your zones are built from it.")
+    else:
+        print("\nYour HR zones are built from your lactate threshold heart rate (LTHR). If you don't know it,\n"
+              "leave it empty and give your maximum heart rate instead.")
+    v = ask("Lactate threshold HR (bpm)", lthr or "",
+            lambda v: None if not v or (v.isdigit() and 120 <= int(v) <= 215) else "a heart rate between 120 and 215, or empty")
+    if not v:
+        mx_ = ask("Maximum HR (bpm)", mx or "", lambda v: None if v.isdigit() and 140 <= int(v) <= 230 else "a heart rate between 140 and 230")
+        mx = int(mx_)
+        v = round(mx * 0.89)
+    zones = zones_from_lthr(int(v), mx)
+    print("Zones: " + ", ".join(f"{k.replace('_', '/')} {lo}-{hi}" for k, (lo, hi) in zones.items()))
+    goal = {"race": race, "short": short, "date": race_date, "target_time": target}
+
+    opts = []
+    if claude_bin():
+        opts += [("ai", "Claude writes a plan for you, from a few questions"),
+                 ("convert", "You have a plan (from a coach, a book, a website): Claude converts it")]
+    opts += [("example", "Start from the built-in 16-week marathon plan (paces scaled to your goal)")]
+    if not claude_bin():
+        print("\n(Install Claude Code, the `claude` command, to have a plan written or converted for you.)")
+    how = choose("\nHow do you want to build it?", opts)
+
+    raw = None
+    if how in ("ai", "convert"):
+        brief = {"goal": goal, "distance": distance, "zones_hr": zones,
+                 "start_date": (now().date() + dt.timedelta(days=7 - now().weekday())).isoformat(),
+                 "today": now().date().isoformat()}
+        text = None
+        if how == "ai":
+            brief["runs_per_week"] = int(ask("Runs per week", "4", lambda v: None if v.isdigit() and 2 <= int(v) <= 7 else "2 to 7"))
+            brief["current_weekly_km"] = float(ask("Km per week lately", "30", lambda v: None if re.fullmatch(r"\d+(\.\d+)?", v) else "a number"))
+            brief["longest_recent_run_km"] = float(ask("Longest run in the last month (km)", "15", lambda v: None if re.fullmatch(r"\d+(\.\d+)?", v) else "a number"))
+            brief["long_run_day"] = ask("Long run day", "Sunday")
+            brief["notes"] = ask("Anything else? (injuries, days you can't run, strength days…)", "")
+            weeks = max(4, min(24, (d(race_date) - d(brief["start_date"])).days // 7 + 1))
+            brief["plan_weeks"] = weeks
+            print(f"\nA {weeks}-week plan starting Monday {brief['start_date']}.")
+        else:
+            f = Path(os.path.expanduser(ask("Path to your plan (a text, Markdown or CSV file)",
+                                            check=lambda v: None if Path(os.path.expanduser(v)).is_file() else "file not found")))
+            text = f.read_text(errors="replace")
+        raw = claude_plan(brief, text)
+        if not raw:
+            if ask("Use the built-in plan instead? (Y/n)", "y").lower() != "y":
+                sys.exit("No plan saved.")
+            how = "example"
+    if how == "example":
+        raw = load_json(asset("example-plan.json"), None)
+        ratio = _hms(target) / _hms(raw["goal"]["target_time"])
+        shift_plan(raw, race_date)
+        scale_paces(raw, ratio)
+        remap_hr(raw, zones)
+        raw["goal"].update(goal)
+        first = min(s_["date"] for s_ in raw["sessions"])
+        if first < now().date().isoformat():
+            print(f"Note: the race is less than 16 weeks away, so the plan's first weeks ({first}…) are already behind you.")
+    save_plan(raw)
+    rebuild()
+    ss = sorted(raw["sessions"], key=lambda x: x["date"])
+    nxt = next((x for x in ss if x["date"] >= now().date().isoformat() and x["type"] != "rest"), None)
+    print(f"\n\033[1mPlan saved\033[0m: {len(ss)} days, {ss[0]['date']} to race day {race_date}.")
+    if nxt:
+        print(f"First session: {nxt['date']} · {nxt['title']}")
+    print("Change it any time with `run-coach edit-plan` (or Edit plan in the panel).")
+
+
+def cmd_edit_plan(args):
+    need_tty("edit-plan")
+    if not PLAN.exists():
+        sys.exit("No plan yet: run `run-coach new-plan`.")
+    import subprocess
+    editor = os.environ.get("VISUAL") or os.environ.get("EDITOR") or next(
+        (e for e in ("nvim", "vim", "nano", "vi") if shutil.which(e)), "vi")
+    tmp = Path(tempfile.mkdtemp()) / "plan.json"
+    shutil.copy2(PLAN, tmp)
+    try:
+        while True:
+            subprocess.run(editor.split() + [str(tmp)])
+            if tmp.read_bytes() == PLAN.read_bytes():
+                print("No changes.")
+                return
+            try:
+                raw = json.loads(tmp.read_text())
+                errs = check_plan(raw)
+            except ValueError as e:
+                errs = [f"not valid JSON: {e}"]
+            if not errs:
+                break
+            print("The plan has problems:\n  - " + "\n  - ".join(errs))
+            if ask("Edit again? (Y/n — n throws your changes away)", "y").lower() != "y":
+                print("Not saved.")
+                return
+        save_plan(raw)
+        rebuild()
+        print("Plan saved.")
+    finally:
+        shutil.rmtree(tmp.parent, ignore_errors=True)
+
+
+def cmd_check_plan(args):
+    f = Path(args.file) if args.file else PLAN
+    try:
+        raw = json.loads(f.read_text())
+    except (OSError, ValueError) as e:
+        sys.exit(f"{f}: {e}")
+    errs = check_plan(raw)
+    if errs:
+        sys.exit(f"{f}: {len(errs)} problem(s)\n  - " + "\n  - ".join(errs))
+    ss = sorted(raw["sessions"], key=lambda x: x["date"])
+    print(f"{f}: OK · {len(ss)} days, {ss[0]['date']} to {ss[-1]['date']} · race {raw['goal']['date']}")
+
+
+def cmd_init_plan(args):
+    """Start from a plan file (the bundled example by default), moved so its
+    race lands on --race-date."""
+    src = Path(args.source) if args.source else asset("example-plan.json")
+    if not src:
+        sys.exit("bundled example plan not found; pass --source FILE")
+    if PLAN.exists() and not args.force:
+        sys.exit(f"{PLAN} already exists (use --force to replace it)")
+    raw = load_json(src, None)
+    if not raw or "sessions" not in raw:
+        sys.exit(f"not a plan: {src}")
+    shift = shift_plan(raw, args.race_date)
     if args.race_name:
         raw["goal"]["race"] = args.race_name
         raw["goal"]["short"] = args.short or args.race_name
@@ -1574,7 +2077,7 @@ def cmd_detail(_):
             print(f"  · {x}")
     w = st.get("week")
     if w:
-        print(f"\nWeek {w['number']}: {w['km']}/{w['target']} km · {w['done']}/{w['planned']} sessions")
+        print(f"\n{w.get('label') or 'Week ' + str(w['number'])}: {w['km']} km" + (f"/{w['target']} km · {w['done']}/{w['planned']} sessions" if w['target'] else ""))
         for dd in w["days"]:
             print(f"  {dd['dow']} {dd['day']:>2}  {dd['status']:<11} {dd['km']:>5} km  {dd['title']}")
     lr = st.get("last_run")
@@ -1707,6 +2210,10 @@ def main():
     ip.add_argument("--target", help="goal time H:MM:SS")
     ip.add_argument("--source", help="plan file to start from (default: the bundled example)")
     ip.add_argument("--force", action="store_true")
+    sub.add_parser("new-plan", help="create your plan: Claude writes or converts one, or start from the example")
+    sub.add_parser("edit-plan", help="open your plan in $EDITOR; checked before it's saved")
+    cp_ = sub.add_parser("check-plan", help="check a plan file for mistakes")
+    cp_.add_argument("file", nargs="?")
     db = sub.add_parser("dashboard", help="the full panel as a web page")
     db.add_argument("--open", action="store_true", help="open it in the browser")
     db.add_argument("--serve", action="store_true", help="serve it (live) instead of writing a file")
@@ -1739,6 +2246,12 @@ def main():
         cmd_install_timer(args)
     elif args.cmd == "init-plan":
         cmd_init_plan(args)
+    elif args.cmd == "new-plan":
+        cmd_new_plan(args)
+    elif args.cmd == "edit-plan":
+        cmd_edit_plan(args)
+    elif args.cmd == "check-plan":
+        cmd_check_plan(args)
     elif args.cmd == "garmin-auth":
         cmd_garmin_auth(args)
     elif args.cmd == "garmin-disconnect":

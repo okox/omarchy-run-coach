@@ -23,7 +23,8 @@ opens your full plan page if you have one.
 
 **In the panel**, three columns that each fold (click a title; it remembers):
 
-- **Plan:** today's session and its steps (Done / Skip / Move to tomorrow), the
+- **Plan:** today's session and its steps (Done / Skip / Move), with ‹ › to
+  look at tomorrow or any other day of the plan, the
   week with a dot per day (hover for the result, click for the details), a
   weekly-km chart for the whole plan (planned vs run), and the race countdown
   with your next checkpoint. Arrows beside the week browse past weeks.
@@ -61,18 +62,36 @@ any time; it never touches your plan, history or logins.
 
 Update with `omarchy plugin update okox.run-coach`, then run `setup.sh` again.
 
-## Your plan
+## Your plan (optional)
 
-Run Coach needs a plan in `~/.config/run-coach/plan.json`. Start from the
-bundled 16-week sub-3:30 marathon example, moved to your race date:
+A plan is not required. Without one, Run Coach shows your runs, the week's
+km, time in your watch's HR zones, fitness and the coach notes, and the panel
+offers **Create a plan**. With a plan you also get the day's session in the
+bar, a verdict on each run against it and a race countdown.
+
+Create one with the panel button, or in a terminal:
 
 ```bash
-run-coach init-plan --race-date 2027-04-18 --race-name "Spring Marathon" --short "Marathon" --target 3:29:59
+run-coach new-plan
 ```
 
-Then **set your own heart-rate zones** in it, and check the paces suit you.
-[PLAN.md](PLAN.md) explains every field, so you can also write your own plan
-or have an AI turn your coach's plan into this format.
+It asks for your race, date and goal time, builds your HR zones from your
+lactate threshold (read from your watch or Garmin when it can), then either:
+
+- **Claude writes the plan** from a few questions (runs per week, current km,
+  longest run, long-run day, anything to work around). Needs
+  [Claude Code](https://claude.com/claude-code); the result is checked and
+  corrected before it's saved.
+- **Claude converts a plan you already have** (from a coach, a book or a
+  website, as a text, Markdown or CSV file).
+- **Starts from the built-in 16-week marathon plan**, moved to your race date,
+  with paces scaled to your goal and HR targets moved to your zones.
+
+**Editing:** `run-coach edit-plan` (or **Edit plan** in the panel) opens it
+in your editor and checks it before saving; a broken plan is never saved,
+and the old one is kept as a backup. `run-coach check-plan` checks a file.
+For a single day, Done / Skip / Move in the panel are enough.
+[PLAN.md](engine/PLAN.md) explains every field.
 
 ## Getting your runs in
 
@@ -137,8 +156,8 @@ The engine runs on any Linux (and macOS, without the systemd timer):
 
 ```bash
 pipx install "git+https://github.com/okox/omarchy-run-coach.git#subdirectory=engine"
-run-coach init-plan --race-date 2027-04-18 --race-name "Spring Marathon" --short Marathon
 run-coach garmin-auth          # and/or: run-coach strava-auth
+run-coach new-plan             # optional
 run-coach install-timer        # systemd user timer: refresh every 15 minutes
 run-coach dashboard --open
 ```
@@ -219,7 +238,10 @@ run-coach scan [--force]        import new runs and refresh the bar
 run-coach detail                everything as text
 run-coach mark done|skip|move|clear [SESSION_ID] [--km N]
 run-coach km 2027-01-10 +1.2    correct a day's km (late watch start, treadmill)
-run-coach init-plan --race-date YYYY-MM-DD [...]
+run-coach new-plan              create a plan (Claude, or the built-in one)
+run-coach edit-plan             edit it in $EDITOR, checked before saving
+run-coach check-plan [FILE]     check a plan file
+run-coach init-plan --race-date YYYY-MM-DD [...]   the built-in plan, no questions
 run-coach dashboard [--open] [--serve [--lan] [--port N]]
 run-coach waybar                Waybar / script-bar JSON
 run-coach install-timer         15-minute refresh (pip/pipx installs)

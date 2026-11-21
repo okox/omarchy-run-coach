@@ -2,7 +2,7 @@
 
 Run Coach reads your plan from `~/.config/run-coach/plan.json`. The easiest
 start is `run-coach init-plan --race-date YYYY-MM-DD`, which copies the bundled
-example ([engine/example-plan.json](engine/example-plan.json)) and moves it to your date.
+example ([engine/example-plan.json](example-plan.json)) and moves it to your date.
 This page explains each field, so you can adapt it or write your own. A good
 trick: give this page and your coach's plan to an AI and ask for the JSON.
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "run-coach"
-version = "1.1.0"
+version = "1.2.0"
 description = "Your running plan, checked against every run: Garmin/Strava import, HR zones, fitness trends, a web dashboard and bar output for Omarchy/Waybar."
 readme = { text = "See https://github.com/okox/omarchy-run-coach", content-type = "text/plain" }
 license = { text = "MIT" }
@@ -26,4 +26,4 @@ run-coach = "run_coach:main"
 py-modules = ["run_coach"]
 
 [tool.setuptools.data-files]
-"share/run-coach" = ["dashboard.html", "example-plan.json"]
+"share/run-coach" = ["dashboard.html", "example-plan.json", "PLAN.md"]
