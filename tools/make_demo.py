@@ -90,7 +90,7 @@ def stages_for(s):
             pace = hr_pace(hr)
         else:
             hr, pace = (150, 420) if kind == "recovery" else (175, 250)
-        val, unit = st["dur"].split()
+        val, unit = st["dur"].split() if st["dur"] != "open" else ("1", "min")
         val = float(val)
         dist = val * 1000 if unit == "km" else (val * 60 if unit == "min" else val) / pace * 1000
         out_.append((kind, name, dist, pace, min(hr, 192), st))

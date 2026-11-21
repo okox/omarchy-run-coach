@@ -64,6 +64,8 @@ Steps are separated by ` | `. Each one is:
 ```
 
 where the target is `HR 150-170`, a pace range `4:50-4:40/km`, or `by feel`.
+The amount can also be `open` for a step that ends when you press lap
+(`open Jog recovery (by feel)`).
 Repeats are `N x [step, step]`:
 
 ```

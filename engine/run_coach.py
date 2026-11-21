@@ -175,7 +175,7 @@ def num(v, nd=1):
 
 # ---------------------------------------------------------------- plan steps
 
-STEP_RE = re.compile(r"^([\d.]+) (km|min|s) (.*?) \((HR (\d+)-(\d+)|(\d+:\d\d)-(\d+:\d\d)/km|by feel)\)$")
+STEP_RE = re.compile(r"^(?:([\d.]+) (km|min|s)|open) (.*?) \((HR (\d+)-(\d+)|(\d+:\d\d)-(\d+:\d\d)/km|by feel)\)$")
 REST_WORDS = ("warm", "cool", "jog", "recovery", "walk", "easy", "stride")
 
 
@@ -184,16 +184,23 @@ def parse_step(txt):
     if not m:
         return None
     val, unit, name, _, hlo, hhi, p1, p2 = m.groups()
-    step = {"name": name, "dur": f"{val} {unit}", "kind": "open"}
+    step = {"name": name, "dur": f"{val} {unit}" if val else "open", "kind": "open"}
     if hlo:
         step.update(kind="hr", lo=int(hlo), hi=int(hhi))
     elif p1:
         a, b = sorted((pace_sec(p1), pace_sec(p2)))
         step.update(kind="pace", lo=a, hi=b)  # lo = fastest, hi = slowest (s/km)
-    low = name.lower()
-    step["work"] = (step["kind"] == "pace" and not any(w in low for w in ("warm", "cool", "jog", "walk"))) or (
-        step["kind"] == "hr" and "benchmark" in low)
+    step["work"] = is_work(step["kind"], name)
     return step
+
+
+def is_work(kind, name):
+    """A rep to judge: a pace or HR target on anything but a warm-up,
+    cool-down, jog, walk, easy or recovery step (a benchmark always counts)."""
+    low = name.lower()
+    if kind == "hr" and "benchmark" in low:
+        return True
+    return kind in ("pace", "hr") and not any(w in low for w in REST_WORDS)
 
 
 def plan_steps(steps_text):
@@ -203,7 +210,7 @@ def plan_steps(steps_text):
         item = item.strip()
         rep = re.match(r"^(\d+) x \[(.*)\]$", item)
         if rep:
-            inner = [parse_step(x) for x in re.split(r",\s(?=[\d.]+ (?:km|min|s) )", rep.group(2))]
+            inner = [parse_step(x) for x in re.split(r",\s(?=[\d.]+ (?:km|min|s) |open )", rep.group(2))]
             if None in inner:
                 return []
             for _ in range(int(rep.group(1))):
@@ -565,11 +572,8 @@ def fit_step(st):
     elif t == "speed" and st.get("custom_target_speed_low"):
         a, b = sorted((1000 / st["custom_target_speed_low"], 1000 / st["custom_target_speed_high"]))
         step.update(kind="pace", lo=a, hi=b)
-    low = name.lower()
     inten = str(st.get("intensity", ""))
-    step["work"] = inten not in ("warmup", "cooldown", "recovery", "rest") and (
-        (step["kind"] == "pace" and not any(w in low for w in ("warm", "cool", "jog", "walk")))
-        or (step["kind"] == "hr" and "benchmark" in low))
+    step["work"] = inten not in ("warmup", "cooldown", "recovery", "rest") and is_work(step["kind"], name)
     return step
 
 
