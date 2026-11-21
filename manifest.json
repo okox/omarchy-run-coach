@@ -17,7 +17,7 @@
     "description": "Today's session from your training plan, with run analysis, fitness and race countdown.",
     "category": "Info",
     "allowMultiple": false,
-    "defaultSection": "centerEnd",
+    "defaultSection": "center",
     "defaults": {
       "maxWidth": 330
     },
