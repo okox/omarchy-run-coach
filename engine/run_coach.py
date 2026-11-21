@@ -93,7 +93,7 @@ GLYPH = {
     "race": "\U000F023C",     # md-flag-checkered
     "setup": "\U000F070E",
 }
-FIT_VERSION = 3  # bump to re-decode cached FIT files after a decoder change
+FIT_VERSION = 4  # bump to re-decode cached FIT files after a decoder change
 RUN_SPORTS = {"running", "Run", "TrailRun", "VirtualRun"}
 STRAVA_API = "https://www.strava.com/api/v3"
 STRAVA_VERSION = 2  # bump to re-fetch run detail after adding fields
@@ -554,7 +554,14 @@ def fit_step(st):
     t = st.get("target_type")
     step = {"name": name, "kind": "open"}
     if t == "heart_rate" and st.get("custom_target_heart_rate_low"):
-        step.update(kind="hr", lo=st["custom_target_heart_rate_low"] - 100, hi=st["custom_target_heart_rate_high"] - 100)
+        # FIT stores bpm + 100 (values up to 100 are % of max HR). Recorded
+        # activities from the watch come back already as bpm, workout files
+        # as bpm + 100: anything above 220 is the offset form.
+        def bpm(v):
+            return v - 100 if v > 220 else v
+        lo_, hi_ = st["custom_target_heart_rate_low"], st["custom_target_heart_rate_high"]
+        if lo_ > 100:
+            step.update(kind="hr", lo=bpm(lo_), hi=bpm(hi_))
     elif t == "speed" and st.get("custom_target_speed_low"):
         a, b = sorted((1000 / st["custom_target_speed_low"], 1000 / st["custom_target_speed_high"]))
         step.update(kind="pace", lo=a, hi=b)
