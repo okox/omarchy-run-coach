@@ -288,10 +288,11 @@ def check_plan(raw):
     return errs[:30]
 
 
-def watch_zones(state):
+def watch_zones(state, strava=True):
     """HR zones without a plan: the watch's own (from the latest FIT file),
     else Garmin's lactate threshold, else the highest HR seen. Returns
-    (bands, easy_cap, recovery_cap, where-from)."""
+    (bands, easy_cap, recovery_cap, where-from). strava=False leaves Strava
+    history out (for anything sent to an AI model)."""
     acts = sorted((c["activity"] for c in state.get("fit", {}).values()
                    if c.get("activity") and (c["activity"].get("hr_zones") or {}).get("bounds")),
                   key=lambda a: a["start_utc"])
@@ -305,7 +306,8 @@ def watch_zones(state):
             src = f"your lactate threshold ({lt} bpm)"
         else:
             hrs = [c["activity"].get("max_hr") or 0 for c in state.get("fit", {}).values() if c.get("activity")]
-            hrs += [a.get("max_hr") or 0 for a in state.get("strava", {}).get("activities", {}).values()]
+            if strava:
+                hrs += [a.get("max_hr") or 0 for a in state.get("strava", {}).get("activities", {}).values()]
             mx = max(hrs + [0]) or 190
             b = [round(mx * f) for f in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0)]
             src = f"your highest HR seen ({mx} bpm)"
@@ -1449,6 +1451,28 @@ NOTE_SYSTEM = (
     "one concrete thing to take into the next runs. Pace is min:sec per km, HR in bpm.")
 
 
+STRAVA_KEYS = ("strava_id", "name", "description", "suffer_score", "kudos", "gear", "best_efforts")
+
+
+def garmin_only(state, plan):
+    """The day's runs and a plan as seen without any Strava data: Strava-only
+    runs dropped, Strava fields stripped from merged ones, and (without a
+    plan) HR zones worked out from Garmin data alone."""
+    by_date = {}
+    for r in merged_runs(state):
+        if "garmin" not in r.get("source", ""):
+            continue
+        r = {k: v for k, v in r.items() if k not in STRAVA_KEYS}
+        r["source"] = "garmin"
+        by_date.setdefault(r["date"], []).append(r)
+    if not plan.has_plan:
+        import copy
+        plan = copy.copy(plan)
+        plan.bands, easy_cap, rec_cap, plan.zones_source = watch_zones(state, strava=False)
+        plan.zones = {"easy": [0, easy_cap], "recovery": [0, rec_cap]}
+    return by_date, plan
+
+
 def write_notes(state, plan, st, limit=3):
     """A coach note per new run, written by Claude Code (headless, no tools).
     At most `limit` per scan, runs from the last 14 days only."""
@@ -1456,14 +1480,17 @@ def write_notes(state, plan, st, limit=3):
         return 0
     import subprocess
     notes = state.setdefault("notes", {})
+    # Strava data is never sent to an AI model: the note is built afresh from
+    # the day's Garmin runs alone, not from the panel's combined day.
+    garmin_days, gplan = garmin_only(state, plan)
     since = (now().date() - dt.timedelta(days=14)).isoformat()
     todo = [dd for w in reversed(st.get("weeks") or []) for dd in reversed(w["days"])
             if dd.get("run") and dd["date"] >= since and dd["date"] not in notes
-            and "garmin" in dd["run"].get("source", "")]  # Strava data is never sent to an AI model
+            and garmin_days.get(dd["date"])]
     made = 0
     for dd in todo[:limit]:
-        r = dict(dd["run"])
-        r.pop("note", None)
+        sess = gplan.by_id(dd.get("id")) if dd.get("id") else None
+        r = analyse(sess, garmin_days[dd["date"]], gplan)
         ch = r.pop("chart", None) or {}
         r.pop("splits", None)
         for k in ("strava", "name", "source"):
@@ -1472,7 +1499,7 @@ def write_notes(state, plan, st, limit=3):
             "goal": f"{plan.goal['race']} on {plan.goal['date']} in {plan.goal['target_time']}" if plan.has_plan
                     else "no training plan: comment on the run itself",
             "plan_week": st["week"]["number"] if plan.has_plan and dd in st["week"]["days"] else None,
-            "hr_zones_bpm": {b["name"]: b["label"] for b in plan.bands}, "easy_cap_bpm": plan.zones["easy"][1],
+            "hr_zones_bpm": {b["name"]: b["label"] for b in gplan.bands}, "easy_cap_bpm": gplan.zones["easy"][1],
             "date": dd["date"], "planned_session": {"id": dd.get("id"), "title": dd.get("title"), "type": dd.get("type"),
                                                      "steps": dd.get("steps")},
             "run": r, "stages": ch.get("stages"),
@@ -1576,12 +1603,40 @@ def cmd_dashboard(args):
         if args.open:
             webbrowser.open(path.as_uri())
         return
+    import hmac
+    import http.cookies
+    import secrets
     host = "0.0.0.0" if args.lan else "127.0.0.1"
     files = {"/": (DASHBOARD, "text/html; charset=utf-8"), "/status.json": (STATUS, "application/json")}
+    # Other accounts on this computer (or anyone on the network with --lan)
+    # can reach the port, so every request needs this run's secret key: in
+    # the link once (?key=…), then as a cookie the browser sends by itself.
+    key = secrets.token_urlsafe(24)
 
     class H(http.server.BaseHTTPRequestHandler):
+        def authorised(self, query):
+            given = (urllib.parse.parse_qs(query).get("key") or [""])[0]
+            if not given:
+                try:
+                    c = http.cookies.SimpleCookie(self.headers.get("Cookie", ""))
+                    given = c["run_coach"].value if "run_coach" in c else ""
+                except http.cookies.CookieError:
+                    given = ""
+            return hmac.compare_digest(given.encode(), key.encode())
+
         def do_GET(self):
-            f = files.get(self.path.split("?")[0])
+            path, _, query = self.path.partition("?")
+            if not self.authorised(query):
+                self.send_error(403, "Open the link Run Coach printed (it has the key)")
+                return
+            if "key=" in query:  # swap the key in the link for a cookie
+                self.send_response(303)
+                self.send_header("Location", path)
+                self.send_header("Set-Cookie", f"run_coach={key}; Path=/; HttpOnly; SameSite=Strict")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            f = files.get(path)
             if not f or not f[0].exists():
                 self.send_error(404)
                 return
@@ -1589,6 +1644,7 @@ def cmd_dashboard(args):
             self.send_response(200)
             self.send_header("Content-Type", f[1])
             self.send_header("Cache-Control", "no-store")
+            self.send_header("Referrer-Policy", "no-referrer")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -1597,12 +1653,21 @@ def cmd_dashboard(args):
             pass
 
     srv = http.server.ThreadingHTTPServer((host, args.port), H)
-    url = f"http://{'localhost' if host == '127.0.0.1' else host}:{args.port}/"
+    url = f"http://localhost:{args.port}/?key={key}"
     print(f"Run Coach dashboard on {url}  (Ctrl+C to stop)")
     if args.lan:
-        print("Shared on your local network with no password: anyone on it can see your training data.")
+        import socket
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as so:
+                so.connect(("192.0.2.1", 9))  # no packet is sent: just picks the LAN address
+                ip = so.getsockname()[0]
+        except OSError:
+            ip = "<this computer's IP>"
+        print(f"On your phone (same Wi-Fi): http://{ip}:{args.port}/?key={key}")
+        print("Plain HTTP: the key keeps others out, but use it on a network you trust.")
+    print("The key changes every time you start the server.")
     if args.open:
-        webbrowser.open(f"http://localhost:{args.port}/")
+        webbrowser.open(url)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
@@ -2229,7 +2294,7 @@ def main():
     db.add_argument("--open", action="store_true", help="open it in the browser")
     db.add_argument("--serve", action="store_true", help="serve it (live) instead of writing a file")
     db.add_argument("--port", type=int, default=8724)
-    db.add_argument("--lan", action="store_true", help="with --serve: reachable from your local network (no password!)")
+    db.add_argument("--lan", action="store_true", help="with --serve: reachable from your local network (needs the printed key)")
     sub.add_parser("install-timer", help="systemd user timer, for installs without setup.sh")
     sub.add_parser("garmin-auth")
     sub.add_parser("garmin-disconnect")

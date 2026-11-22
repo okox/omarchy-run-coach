@@ -143,12 +143,15 @@ stacks into one column on a phone. The engine rewrites it on every refresh.
 
 ```bash
 run-coach dashboard --open            # open ~/.local/state/run-coach/dashboard.html
-run-coach dashboard --serve --open    # live at http://localhost:8724, refreshes itself
+run-coach dashboard --serve --open    # live, refreshes itself; opens the printed link with its key
 run-coach dashboard --serve --lan     # also reachable from your phone on the same Wi-Fi
 ```
 
-`--lan` has no password: anyone on your network can see your training data, so
-use it at home only. Without `--lan` it only listens on this computer.
+The server prints a link with a secret key (`?key=…`), new each time it
+starts; without it every request is refused, so other accounts on a shared
+computer can't read your training data even though the port is local. Without
+`--lan` it only listens on this computer. With `--lan` it prints a second link
+for your phone; it's plain HTTP, so use it on a network you trust.
 
 ## Without Omarchy
 
@@ -204,7 +207,10 @@ with no tools, at most three notes per refresh, on your Claude subscription.
 
 Only Garmin data goes into the note: the run's numbers, its stages, the
 planned session and your zones. Strava data is never sent to an AI model,
-in line with Strava's API terms. Turn notes off with `"coach_notes": false`.
+in line with Strava's API terms: the note is worked out again from the day's
+Garmin runs alone (a Strava-only run that day is left out, and so are the
+Strava name, description and effort of a run both recorded), and without a
+plan the zones it gets come from Garmin data only. Turn notes off with `"coach_notes": false`.
 
 The note appears in the run column as a **Coach's note · by Claude** box.
 No API key is needed: it uses whatever login your Claude Code has. On a
