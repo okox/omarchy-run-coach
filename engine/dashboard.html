@@ -417,7 +417,9 @@ renderAll();
 // Served by `run-coach dashboard --serve`: poll for fresh data. Opened as a
 // file: reload it now and then (the engine rewrites it on every refresh).
 if (location.protocol.startsWith("http")) {
-  setInterval(() => fetch("status.json", { cache: "no-store" }).then(r => r.json()).then(j => { if (j.generated !== ST?.generated) { ST = j; renderAll(); } }).catch(() => {}), 60000);
+  // The server's key is in this page's address: pass it on (no cookie).
+  const key = new URLSearchParams(location.search).get("key") || "";
+  setInterval(() => fetch("status.json?key=" + encodeURIComponent(key), { cache: "no-store" }).then(r => r.json()).then(j => { if (j.generated !== ST?.generated) { ST = j; renderAll(); } }).catch(() => {}), 60000);
 } else {
   setTimeout(() => location.reload(), 5 * 60000);
 }

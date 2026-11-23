@@ -148,7 +148,8 @@ run-coach dashboard --serve --lan     # also reachable from your phone on the sa
 ```
 
 The server prints a link with a secret key (`?key=…`), new each time it
-starts; without it every request is refused, so other accounts on a shared
+starts; without it every request is refused (the key stays in the link, never
+in a cookie), so other accounts on a shared
 computer can't read your training data even though the port is local. Without
 `--lan` it only listens on this computer. With `--lan` it prints a second link
 for your phone; it's plain HTTP, so use it on a network you trust.

@@ -1604,37 +1604,24 @@ def cmd_dashboard(args):
             webbrowser.open(path.as_uri())
         return
     import hmac
-    import http.cookies
     import secrets
     host = "0.0.0.0" if args.lan else "127.0.0.1"
     files = {"/": (DASHBOARD, "text/html; charset=utf-8"), "/status.json": (STATUS, "application/json")}
     # Other accounts on this computer (or anyone on the network with --lan)
-    # can reach the port, so every request needs this run's secret key: in
-    # the link once (?key=…), then as a cookie the browser sends by itself.
+    # can reach the port, so every request needs this run's secret key in its
+    # address (?key=…). No cookie: browsers send localhost cookies to every
+    # port, so another account's server on localhost could collect it.
     key = secrets.token_urlsafe(24)
 
     class H(http.server.BaseHTTPRequestHandler):
         def authorised(self, query):
             given = (urllib.parse.parse_qs(query).get("key") or [""])[0]
-            if not given:
-                try:
-                    c = http.cookies.SimpleCookie(self.headers.get("Cookie", ""))
-                    given = c["run_coach"].value if "run_coach" in c else ""
-                except http.cookies.CookieError:
-                    given = ""
             return hmac.compare_digest(given.encode(), key.encode())
 
         def do_GET(self):
             path, _, query = self.path.partition("?")
             if not self.authorised(query):
                 self.send_error(403, "Open the link Run Coach printed (it has the key)")
-                return
-            if "key=" in query:  # swap the key in the link for a cookie
-                self.send_response(303)
-                self.send_header("Location", path)
-                self.send_header("Set-Cookie", f"run_coach={key}; Path=/; HttpOnly; SameSite=Strict")
-                self.send_header("Content-Length", "0")
-                self.end_headers()
                 return
             f = files.get(path)
             if not f or not f[0].exists():
